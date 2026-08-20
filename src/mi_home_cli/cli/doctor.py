@@ -108,7 +108,11 @@ def run(ctx: typer.Context, output=None) -> None:
 
         add("zeroconf", OK, "已安装，可自动广播 mDNS")
     except ImportError:
-        add("zeroconf", WARN, "未安装，装了可提高自动回调成功率：pip install 'mi-home-cli[mdns]'")
+        add(
+            "zeroconf",
+            WARN,
+            "未安装，装了可提高自动回调成功率：uv sync --extra mdns",
+        )
 
     # 4. 网络连通性
     status, detail = _check_reachable("https://account.xiaomi.com/", timeout)

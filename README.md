@@ -4,16 +4,25 @@
 
 ## 安装
 
+依赖用 [uv](https://docs.astral.sh/uv/) 管理。
+
 ```bash
-pip install -e '.[mdns]'      # mdns 是可选依赖，能提高登录时自动接收回调的成功率
+uv sync --extra mdns          # mdns 是可选依赖，能提高登录时自动接收回调的成功率
+uv run mi --help
+```
+
+想要一个全局可用的 `mi` 命令：
+
+```bash
+uv tool install --with zeroconf .
 ```
 
 ## 登录
 
 ```bash
-mi doctor        # 先看看端口、域名解析、网络、时钟有没有问题
-mi auth login
-mi auth status
+uv run mi doctor        # 先看看端口、域名解析、网络、时钟有没有问题
+uv run mi auth login
+uv run mi auth status
 ```
 
 小米的 OAuth 服务只接受 host 为 `homeassistant.local:8123` 的回调地址（实测结论见
@@ -46,11 +55,12 @@ mi version
 ## 开发
 
 ```bash
-python -m venv .venv && .venv/bin/pip install -e '.[dev,mdns]'
-.venv/bin/python -m pytest
+uv sync --extra mdns    # 创建 .venv 并按 uv.lock 装齐运行时依赖 + dev 依赖组
+uv run pytest
 ```
 
-测试全部离线运行，不需要小米账号。
+`uv.lock` 已提交，用来锁定可复现的依赖版本；改了 `pyproject.toml` 后跑
+`uv lock` 更新它。测试全部离线运行，不需要小米账号。
 
 ## 文档
 

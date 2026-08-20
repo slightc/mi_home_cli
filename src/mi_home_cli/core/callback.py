@@ -153,7 +153,7 @@ class MdnsPublisher:
         try:
             from zeroconf import ServiceInfo, Zeroconf
         except ImportError:
-            return "未安装 zeroconf（pip install 'mi-home-cli[mdns]'）"
+            return "未安装 zeroconf（uv sync --extra mdns）"
         try:
             self._zeroconf = Zeroconf()
             self._info = ServiceInfo(

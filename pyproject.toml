@@ -15,8 +15,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# 可选的运行时增强：登录时自动广播 mDNS，提高回调命中率。
 mdns = ["zeroconf>=0.130"]
-dev = ["pytest>=8.0", "pytest-httpx>=0.30"]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
 
 [project.scripts]
 mi = "mi_home_cli.cli.app:main"

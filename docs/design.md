@@ -84,7 +84,8 @@ miIO 协议：UDP `54321`，包头 `0x2131`，密钥 = `md5(token)`，IV = `md5(
 
 - 与参考实现同语言，协议对照成本最低；`python-miio`（局域网）、`paho-mqtt`、`httpx`、`cryptography` 生态齐全。
 - CLI 框架 `typer`（基于 click，自带补全生成），输出用 `rich`（表格/颜色/进度）。
-- 打包：`uv` / `pipx install mi-home-cli`，入口命令 `mi`。
+- 依赖与打包统一用 `uv`：`uv sync` 建环境、`uv lock` 锁版本（`uv.lock` 入库），
+  `uv run mi ...` 开发期调用，`uv tool install` 装成全局命令；入口命令 `mi`。
 
 备选：Go（单二进制、启动快、分发省心，但 miIO 与 spec 解析要全部自己写）。若目标是「给别人分发的工具」而非「自己用的脚本」，可以选 Go；本设计按 Python 展开，分层设计对两者通用。
 
@@ -108,8 +109,8 @@ mi_home_cli/
 │   ├── registry.py          # 设备清单缓存 + 名称/别名解析
 │   ├── channel.py           # 通道路由：auto / cloud / lan
 │   └── errors.py            # 错误码 → 人话 + 退出码
-├── store/                   # ~/.config/mi-home-cli 的读写（profile 隔离）
-└── tests/
+├── store.py                 # ~/.config/mi-home-cli 的读写（profile 隔离）
+└── tests/                   # 全部离线，用 httpx.MockTransport 回放
 ```
 
 **关键抽象 `Channel`**：`get_props / set_props / call_action` 三个方法，`CloudChannel` 与 `LanChannel` 都实现它，`AutoChannel` 按「本机有 token + 设备在同网段 + 局域网可达」优先走 LAN、失败回落云端。CLI 层完全不感知走的哪条路（`--channel` 可强制）。
