@@ -64,6 +64,12 @@
 
 ### 1.4 实时推送
 
+> TLS 的根证书按「`MI_CA_BUNDLE` → 系统默认（含 `SSL_CERT_FILE`）→ certifi 兜底」
+> 的顺序取。只用 certifi 会把配了企业 CA 的用户挡在门外；只用系统默认则在
+> macOS 的某些 Python 上一张根证书都没有。另外代理的 fake-IP（`198.18.x.x`）
+> 会做中间人，证书校验必然失败，`mi doctor` 会把这种情况点出来。
+
+
 云端 MQTT：`{区域}-ha.mqtt.io.mi.com:8883`，TLS + MQTT v5，
 **用户名是 OAuth 的 client_id、密码是 access_token**，
 client_id 就是 OAuth 用的那个 `ha.{32 位 hex}`。订阅：

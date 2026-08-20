@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import socket
+import ssl
 import time
 from email.utils import parsedate_to_datetime
 from typing import Any
@@ -32,16 +33,42 @@ def _check_reachable(url: str, timeout: float) -> tuple[str, str]:
     return OK, f"HTTP {response.status_code}"
 
 
-def _check_tcp(host: str, port: int, timeout: float) -> tuple[str, str]:
-    """MQTT 走裸 TCP，被出口防火墙拦掉是常见情况，单独测一下。"""
+# Clash / Surge 这类代理的 fake-IP 网段。域名解析到这里说明流量被代理接管了。
+_FAKE_IP_PREFIXES = ("198.18.", "198.19.", "240.", "28.")
+
+
+def _check_broker(host: str, port: int, timeout: float) -> tuple[str, str]:
+    """MQTT 要过 TCP + TLS 两关，分开测——两者的排查方向完全不同。"""
+    try:
+        addresses = sorted({item[4][0] for item in socket.getaddrinfo(host, port)})
+    except socket.gaierror as err:
+        return FAIL, f"域名解析失败：{err}"
+    fake = [ip for ip in addresses if ip.startswith(_FAKE_IP_PREFIXES)]
+
     started = time.time()
     try:
-        with socket.create_connection((host, port), timeout=min(timeout, 5)):
-            return OK, f"可连接（{(time.time() - started) * 1000:.0f}ms）"
+        with socket.create_connection((host, port), timeout=min(timeout, 5)) as raw:
+            elapsed = (time.time() - started) * 1000
+            context = ssl.create_default_context()
+            try:
+                with context.wrap_socket(raw, server_hostname=host):
+                    pass
+            except ssl.SSLCertVerificationError as err:
+                detail = f"TCP 通（{elapsed:.0f}ms）但证书校验失败：{err.verify_message or err}"
+                if fake:
+                    detail += f"；域名解析到 {fake[0]}，是代理的 fake-IP，给它加条直连规则"
+                return FAIL, detail
+            except ssl.SSLError as err:
+                return FAIL, f"TLS 握手失败：{err}"
     except socket.timeout:
         return FAIL, "连接超时，出口多半封了这个端口（mi watch 会用不了）"
     except OSError as err:
         return FAIL, f"{type(err).__name__}: {err}"
+
+    detail = f"TCP + TLS 均可（{elapsed:.0f}ms）"
+    if fake:
+        detail += f"；注意解析到 {fake[0]}，流量经过代理"
+    return OK, detail
 
 
 def _check_clock(timeout: float) -> tuple[str, str]:
@@ -137,7 +164,7 @@ def run(ctx: typer.Context, output=None) -> None:
     from ..core.mqtt import BROKER_PORT, broker_host
 
     host = broker_host(region)
-    status, detail = _check_tcp(host, BROKER_PORT, timeout)
+    status, detail = _check_broker(host, BROKER_PORT, timeout)
     add(f"{host}:{BROKER_PORT}", status, detail)
 
     # 6. 时钟

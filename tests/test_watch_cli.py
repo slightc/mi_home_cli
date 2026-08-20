@@ -78,7 +78,7 @@ class FakeClient:
     def subscribe(self, topic, qos=0):
         self.subscribed.append(topic)
 
-    def connect_async(self, *args):
+    def connect(self, *args):
         pass
 
     def loop_start(self):

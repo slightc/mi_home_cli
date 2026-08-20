@@ -95,7 +95,7 @@ class FakeClient:
     def subscribe(self, topic, qos=0):
         self.subscribed.append(topic)
 
-    def connect_async(self, host, port, keepalive):
+    def connect(self, host, port, keepalive):
         self.target = (host, port, keepalive)
 
     def loop_start(self):
@@ -195,3 +195,38 @@ def test_tls_context_is_verifying():
     context = _ssl_context()
     assert context.verify_mode == _ssl.CERT_REQUIRED
     assert context.check_hostname is True
+
+
+def test_ca_bundle_env_overrides(monkeypatch, tmp_path):
+    """中间人代理环境里得能指定代理自己的根证书，否则连不上。"""
+    import certifi
+
+    from mi_home_cli.core.mqtt import CA_BUNDLE_ENV, _ssl_context
+
+    bundle = tmp_path / "ca.pem"
+    bundle.write_text(open(certifi.where(), encoding="utf-8").read(), encoding="utf-8")
+    monkeypatch.setenv(CA_BUNDLE_ENV, str(bundle))
+    assert _ssl_context().get_ca_certs()
+
+
+def test_system_store_wins_over_certifi(monkeypatch):
+    """系统里装了企业根证书时要用系统的，certifi 只做兜底——
+
+    强行只用 certifi 会把配了企业 CA 的用户挡在门外。
+    """
+    import ssl as _ssl
+
+    from mi_home_cli.core import mqtt as module
+
+    calls = []
+    real = _ssl.create_default_context
+
+    def spy(*args, **kwargs):
+        calls.append(kwargs.get("cafile"))
+        return real(*args, **kwargs)
+
+    monkeypatch.delenv(module.CA_BUNDLE_ENV, raising=False)
+    monkeypatch.setattr(module.ssl, "create_default_context", spy)
+    module._ssl_context()
+    # 系统store 有证书时不该再去加载 certifi
+    assert calls == [None]

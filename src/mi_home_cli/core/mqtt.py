@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import os
 import queue
 import ssl
 import threading
@@ -25,18 +26,32 @@ BROKER_PORT = 8883
 KEEPALIVE = 60
 
 
+CA_BUNDLE_ENV = "MI_CA_BUNDLE"
+
+
 def _ssl_context() -> ssl.SSLContext:
     """TLS 上下文。
 
-    优先用 certifi 的根证书：paho 默认走系统 CA，而 macOS 上的 Python 经常
-    找不到根证书（同一台机器 httpx 能通、MQTT 连不上，多半就是这个原因）。
+    顺序有讲究：
+    1. MI_CA_BUNDLE 指定的证书优先——用自签 CA 做中间人的环境（企业代理、
+       Clash/Surge 的 MITM）得靠它才能连上；
+    2. 否则用系统默认（也会认 SSL_CERT_FILE），这样系统钥匙串里装了的
+       企业根证书能直接生效；
+    3. 系统里一张根证书都没有时（macOS 上的 Python 常见）再退回 certifi。
+    强行只用 certifi 会把第 2 类用户挡在门外，所以 certifi 只做兜底。
     """
-    try:
-        import certifi
+    override = os.environ.get(CA_BUNDLE_ENV)
+    if override:
+        return ssl.create_default_context(cafile=override)
+    context = ssl.create_default_context()
+    if not context.get_ca_certs():
+        try:
+            import certifi
 
-        return ssl.create_default_context(cafile=certifi.where())
-    except ImportError:
-        return ssl.create_default_context()
+            return ssl.create_default_context(cafile=certifi.where())
+        except ImportError:
+            pass
+    return context
 
 
 def broker_host(region: str) -> str:
@@ -201,13 +216,25 @@ class CloudMqtt:
 
     def start(self, timeout: float = 15.0) -> None:
         self._client.username_pw_set(const.CLIENT_ID, self._token_provider())
+        host = broker_host(self.region)
         try:
-            self._client.connect_async(broker_host(self.region), BROKER_PORT, KEEPALIVE)
-            self._client.loop_start()
-        except OSError as err:
+            # 用同步 connect：异步版把握手异常闷在后台线程里，只剩一句超时，
+            # 而证书校验失败这类问题必须把原文给用户看
+            self._client.connect(host, BROKER_PORT, KEEPALIVE)
+        except ssl.SSLCertVerificationError as err:
             raise NetworkError(
-                f"连接 {broker_host(self.region)}:{BROKER_PORT} 失败：{err}"
+                f"{host}:{BROKER_PORT} 的证书校验失败：{err}",
+                hint=(
+                    "多半是代理在做中间人（Clash/Surge 的 fake-IP 会把域名解析到 "
+                    "198.18.x.x）。给这个域名加一条直连规则，或用 "
+                    f"{CA_BUNDLE_ENV} 指定代理的根证书"
+                ),
             ) from err
+        except (OSError, ssl.SSLError) as err:
+            raise NetworkError(
+                f"连接 {host}:{BROKER_PORT} 失败：{type(err).__name__}: {err}"
+            ) from err
+        self._client.loop_start()
         if not self._connected.wait(timeout):
             failure = self._failure
             self.stop()

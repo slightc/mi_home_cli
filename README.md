@@ -110,7 +110,12 @@ mi watch 门锁 -o json | while read -r line; do
 done
 ```
 
-网络出口封了 8883 时连不上（公司网、容器里常见），命令会明确报出来。
+连不上时会说清楚卡在哪一层：端口不通、证书校验失败、还是 broker 拒绝连接。
+`mi doctor` 里也有一项 TCP + TLS 探测。
+
+**用 Clash / Surge 这类代理要注意**：它们的 fake-IP 会把 `*.mqtt.io.mi.com`
+解析到 `198.18.x.x` 并做中间人，导致证书校验失败。给这个域名加一条直连规则即可；
+或者用 `MI_CA_BUNDLE=/path/to/proxy-ca.pem` 指定代理的根证书。
 
 局域网直连走 miIO 协议（UDP 54321，AES-128-CBC，密钥来自设备 token）。
 **默认走云端**：局域网要先探活、失败还要回落，首次命中的等待都算在用户头上，
