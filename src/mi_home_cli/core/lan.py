@@ -4,7 +4,8 @@ UDP 54321，包结构：
 
     0-1    魔数 0x2131
     2-3    整包长度
-    4-11   did（8 字节，高 4 字节实际恒为 0）
+    4-7    unknown（发包时填 0；但设备回包里不一定是 0，实测有设备填 16）
+    8-11   did
     12-15  设备自己的时间戳
     16-31  md5 校验位（计算时这 16 字节先填 token）
     32-    AES-128-CBC 加密的 JSON-RPC，PKCS7 填充
@@ -50,27 +51,38 @@ class Endpoint:
     ip: str
     stamp: int  # 设备自己报的时间戳
     offset: float  # 本机时间 - 设备时间戳，用来推算后续请求该填什么
-    latency_ms: float = 0.0
+    elapsed_ms: float = 0.0  # 从发出探测到收到这台设备应答的耗时
     port: int = PORT
+    # 广播扫描时这个耗时包含了排队等待，不是往返延迟；只有单播探活
+    # （ping）测出来的才是真延迟
+    is_rtt: bool = False
 
     def current_stamp(self) -> int:
         return int(time.time() - self.offset)
 
 
 def _parse_hello(
-    data: bytes, latency_ms: float, ip: str, port: int = PORT
+    data: bytes,
+    elapsed_ms: float,
+    ip: str,
+    port: int = PORT,
+    is_rtt: bool = False,
 ) -> Endpoint | None:
     if len(data) < HEADER_LEN or data[:2] != b"\x21\x31":
         return None
-    did = struct.unpack(">Q", data[4:12])[0]
+    # did 是 4 字节。它前面那 4 字节（unknown）在回包里不一定是 0——实测某设备
+    # 填的是 16——所以不能把 8 个字节当成一个整数读，否则 did 会大出天际、
+    # 永远匹配不上云端清单。
+    did = struct.unpack(">I", data[8:12])[0]
     stamp = struct.unpack(">I", data[12:16])[0]
     return Endpoint(
         did=str(did),
         ip=ip,
         stamp=stamp,
         offset=time.time() - stamp,
-        latency_ms=latency_ms,
+        elapsed_ms=elapsed_ms,
         port=port,
+        is_rtt=is_rtt,
     )
 
 
@@ -110,7 +122,9 @@ def ping(ip: str, timeout: float = 0.6, port: int = PORT) -> Endpoint | None:
         started = time.time()
         sock.sendto(HELLO, (ip, port))
         data, _ = sock.recvfrom(1024)
-        return _parse_hello(data, (time.time() - started) * 1000, ip, port)
+        return _parse_hello(
+                data, (time.time() - started) * 1000, ip, port, is_rtt=True
+            )
     except (socket.timeout, OSError):
         return None
     finally:

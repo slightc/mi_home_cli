@@ -146,5 +146,5 @@ def open_device_channel(
         return cloud
 
     if on_note:
-        on_note(f"[dim]局域网直连 {endpoint.ip}（{endpoint.latency_ms:.0f}ms）[/dim]")
+        on_note(f"[dim]局域网直连 {endpoint.ip}（{endpoint.elapsed_ms:.0f}ms）[/dim]")
     return LanChannel(LanDevice(device.did, device.token or "", endpoint))

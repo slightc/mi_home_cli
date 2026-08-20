@@ -63,7 +63,8 @@ def lan_discover(
                 "房间": (device.room_name or "-") if device else "-",
                 "IP": endpoint.ip,
                 "did": did,
-                "延迟": f"{endpoint.latency_ms:.0f}ms",
+                # 广播扫描里这个数包含排队等待，不是往返延迟，别叫它「延迟」
+                "应答用时": f"{endpoint.elapsed_ms:.0f}ms",
                 "型号": device.model if device else "-",
             }
         )
@@ -102,7 +103,11 @@ def lan_status(
     else:
         data["可达"] = "是"
         data["IP"] = endpoint.ip
-        data["延迟"] = f"{endpoint.latency_ms:.0f}ms"
+        data["延迟"] = (
+            f"{endpoint.elapsed_ms:.0f}ms"
+            if endpoint.is_rtt
+            else f"{endpoint.elapsed_ms:.0f}ms（广播应答用时，非往返延迟）"
+        )
         data["设备时间戳"] = endpoint.stamp
     render.output(data, pick_output(app_ctx, output))
 

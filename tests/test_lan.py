@@ -209,3 +209,27 @@ def test_parse_hello():
 def test_bad_token_length_rejected_early():
     with pytest.raises(MiCliError):
         LanDevice("1", "abc", Endpoint("1", "127.0.0.1", 0, 0.0))
+
+
+def test_hello_did_is_four_bytes_not_eight():
+    """did 只占 4 字节，它前面的 unknown 字段回包里不一定是 0。
+
+    实测有设备把 unknown 填成 16，按 8 字节读会得到 70044981670 这种
+    离谱的 did，于是永远匹配不上云端清单、无法直连。
+    """
+    payload = (
+        struct.pack(">HH", 0x2131, 32)
+        + struct.pack(">I", 16)  # unknown ≠ 0
+        + struct.pack(">I", 1325504934)  # did
+        + struct.pack(">I", STAMP)
+        + b"\xff" * 16
+    )
+    endpoint = _parse_hello(payload, 0, "192.168.5.247")
+    assert endpoint.did == "1325504934"
+
+
+def test_broadcast_elapsed_is_not_labelled_as_rtt():
+    """广播扫描测到的耗时包含排队等待，不能当成往返延迟。"""
+    payload = struct.pack(">HHQI16s", 0x2131, 32, DID, STAMP, b"\xff" * 16)
+    assert _parse_hello(payload, 654.0, "1.2.3.4").is_rtt is False
+    assert _parse_hello(payload, 5.0, "1.2.3.4", is_rtt=True).is_rtt is True
