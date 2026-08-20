@@ -138,6 +138,13 @@ def watch(
     state: Annotated[
         bool, typer.Option("--state/--no-state", help="是否包含上下线")
     ] = True,
+    all_updates: Annotated[
+        bool,
+        typer.Option(
+            "--all-updates",
+            help="连值没变的周期上报也显示（默认只显示真的变化）",
+        ),
+    ] = False,
     exit_after: Annotated[
         Optional[int], typer.Option("--exit-after", help="收到 N 条后退出")
     ] = None,
@@ -193,6 +200,7 @@ def watch(
         )
         previous: dict[tuple[str, int, int], Any] = {}
         seen = 0
+        repeats = 0
         deadline = time.monotonic() + duration if duration else None
         try:
             client.start()
@@ -205,6 +213,15 @@ def watch(
                     continue
                 device = by_did.get(message.did)
                 if device is None:
+                    continue
+                # 设备会周期性重报同一个值，默认不刷屏——watch 看的是变化
+                if (
+                    not all_updates
+                    and message.kind == "prop"
+                    and previous.get((device.did, message.siid or -1, message.iid or -1))
+                    == message.value
+                ):
+                    repeats += 1
                     continue
                 row = _describe(message, device, specs.get(device.urn), previous)
                 if row is None:
@@ -224,7 +241,8 @@ def watch(
             render.info("")
         finally:
             client.stop()
-        render.info(f"[dim]共 {seen} 条[/dim]")
+        tail = f"，另有 {repeats} 条值未变的上报已跳过" if repeats else ""
+        render.info(f"[dim]共 {seen} 条{tail}[/dim]")
 
 
 def _emit(row: dict[str, Any], fmt: OutputFormat, device: Device) -> None:

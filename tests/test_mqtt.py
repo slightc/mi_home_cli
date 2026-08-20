@@ -288,3 +288,21 @@ def test_new_client_per_ca_attempt(monkeypatch):
     assert "certifi" in notes[0]
     # 新客户端也要把订阅补上
     assert built[1].subscribed == ["device/d1/state/#"]
+
+
+def test_stop_does_not_report_reconnecting(fake: CloudMqtt):
+    """Ctrl-C 主动停止时也会触发 on_disconnect，不该喊「正在重连」。"""
+    states: list[bool] = []
+    fake._on_state_change = states.append
+    client = fake._client
+    fake._handle_connect(client, None, None, reason_code=None)
+    assert states == [True]
+
+    fake.stop()
+    fake._handle_disconnect(client, None)
+    assert states == [True]  # 没有多出一条 False
+
+    # 真掉线仍然要报
+    fake._stopping = False
+    fake._handle_disconnect(client, None)
+    assert states == [True, False]

@@ -405,7 +405,12 @@ def parse_value(prop: Property, raw: str) -> Any:
 
 
 def format_value(prop: Property, value: Any) -> str:
-    """把接口返回的值变成人看的样子。"""
+    """把接口返回的值变成人看的样子。
+
+    浮点数按 6 位有效数字显示：设备回的温度是 23.700001，原样甩给用户既难看
+    又像是精度错觉。用有效数字而不是固定小数位，是为了不把 0.019 mg/m³ 这种
+    小量级的值四舍五入成 0.02。
+    """
     if value is None:
         return "-"
     if prop.format == "bool":
@@ -413,6 +418,8 @@ def format_value(prop: Property, value: Any) -> str:
     for item in prop.value_list:
         if item.value == value:
             return f"{item.description}({value})"
+    if isinstance(value, float):
+        value = f"{value:.6g}"
     unit = unit_symbol(prop.unit)
     if unit:
         return f"{value}{'' if unit in ('%', '°', '℃', '℉') else ' '}{unit}"

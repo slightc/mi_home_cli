@@ -195,3 +195,48 @@ def test_watch_unknown_device(env):
     result = CliRunner().invoke(app, ["watch", "不存在的灯", "--exit-after", "1"])
     assert isinstance(result.exception, DeviceNotFound)
     assert result.exception.exit_code == 3
+
+
+REPEATS = [
+    ("device/d1/up/properties_changed/2/2", b'{"params":{"siid":2,"piid":2,"value":60}}'),
+    ("device/d1/up/properties_changed/2/2", b'{"params":{"siid":2,"piid":2,"value":60}}'),
+    ("device/d1/up/properties_changed/2/2", b'{"params":{"siid":2,"piid":2,"value":80}}'),
+]
+
+
+def test_repeated_values_are_skipped_by_default(env, monkeypatch):
+    """设备会周期性重报同一个值，真机上 26 条里一半是「1 → 1」这种噪音。"""
+    import mi_home_cli.core.mqtt as module
+
+    monkeypatch.setattr(module.mqtt, "Client", _client_replaying(REPEATS))
+    result = CliRunner().invoke(
+        app, ["-o", "plain", "watch", "客厅灯", "--exit-after", "2"]
+    )
+    assert result.exit_code == 0, result.output
+    lines = [line for line in result.output.splitlines() if "Brightness" in line]
+    assert len(lines) == 2  # 60、80，中间重复的 60 被跳过
+    assert "1 条值未变的上报已跳过" in result.output
+
+
+def test_all_updates_keeps_repeats(env, monkeypatch):
+    import mi_home_cli.core.mqtt as module
+
+    monkeypatch.setattr(module.mqtt, "Client", _client_replaying(REPEATS))
+    result = CliRunner().invoke(
+        app,
+        ["-o", "plain", "watch", "客厅灯", "--all-updates", "--exit-after", "3"],
+    )
+    assert result.exit_code == 0, result.output
+    assert len([x for x in result.output.splitlines() if "Brightness" in x]) == 3
+
+
+def _client_replaying(messages):
+    class Replay(FakeClient):
+        def loop_start(self):
+            self.on_connect(self, None, None, None)
+            for topic, payload in messages:
+                self.on_message(
+                    self, None, type("M", (), {"topic": topic, "payload": payload})()
+                )
+
+    return Replay

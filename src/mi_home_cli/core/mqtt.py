@@ -164,6 +164,8 @@ class CloudMqtt:
         # 连不上时把真正的原因记下来：TCP 不通、TLS 握手失败、认证被拒，
         # 这三种问题排查方向完全不同，压成一句「超时」等于没说
         self._failure: str | None = None
+        # 主动 stop() 时也会触发 on_disconnect，别把它当成掉线
+        self._stopping = False
         self._contexts = ssl_contexts()
         self._client_id = client_id
         self._debug = debug
@@ -213,6 +215,8 @@ class CloudMqtt:
         self, client, userdata, disconnect_flags=None, reason_code=None, properties=None
     ):
         self._connected.clear()
+        if self._stopping:
+            return
         if self._on_state_change:
             self._on_state_change(False)
         # access_token 可能已经续期，重连前把密码换成最新的
@@ -293,6 +297,7 @@ class CloudMqtt:
             )
 
     def stop(self) -> None:
+        self._stopping = True
         try:
             self._client.disconnect()
         finally:

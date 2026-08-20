@@ -67,7 +67,8 @@ mi action <设备> [动作] [--in 值]...
 mi on|off|toggle <设备>
 
 # 实时盯着（云端 MQTT 长连接，不是轮询）
-mi watch [设备...] [--prop on] [--no-events] [--no-state] [--exit-after N] [--duration 秒]
+mi watch [设备...] [--prop on] [--no-events] [--no-state] [--all-updates]
+                   [--exit-after N] [--duration 秒]
 
 # 语义命令（不带选项时显示当前状态）
 mi light <设备> [--on|--off] [--brightness 60] [--ct 4000] [--color 红] [--mode 日光]

@@ -223,3 +223,24 @@ def test_verify_skips_unreadable_properties(monkeypatch, spec):
 
     monkeypatch.setattr("time.sleep", lambda _: None)
     assert verify_after_write(Boom(), "d1", [(write_only, 3)], delay=0) == {}
+
+
+def test_float_is_shown_with_significant_digits(spec):
+    """设备回的温度是 23.700001，原样显示既难看又像精度错觉。
+
+    用有效数字而不是固定小数位：固定 2 位会把 0.019 mg/m³ 舍成 0.02。
+    """
+    from mi_home_cli.core.spec import Property, format_value
+
+    temperature = Property(
+        siid=3, piid=2, name="temperature", description="温度", format="float",
+        access=["read"], service="environment", unit="celsius",
+    )
+    assert format_value(temperature, 23.700001) == "23.7℃"
+    assert format_value(temperature, 57.0) == "57℃"
+
+    hcho = Property(
+        siid=3, piid=6, name="hcho-density", description="甲醛", format="float",
+        access=["read"], service="environment", unit="mg/m3",
+    )
+    assert format_value(hcho, 0.019) == "0.019 mg/m³"
