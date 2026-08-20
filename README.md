@@ -364,7 +364,7 @@ uv run pytest
 | 局域网直连（miIO） | ✅ |
 | 米家场景 / 自动化 | ❌ 需要账号密码那套身份，本项目只用 OAuth2 |
 | 摄像机报警录像回放 | ❌ 同上 |
-| 摄像机实时推流地址 | ⚠️ 型号带 `camera-stream-for-*` 服务的可以：`mi action <设备> start-rtsp-stream` |
+| 摄像机实时推流地址 | ⚠️ 部分型号可以，见 [docs/camera-stream.md](docs/camera-stream.md) |
 | 中枢网关本地控制 | ❌ 需要证书，仅 cn 区，复杂度高 |
 
 **只用 OAuth2** 是一条明确的边界：授权在浏览器里完成，CLI 只拿到一个有期限、可撤销的
