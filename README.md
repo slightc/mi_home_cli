@@ -256,8 +256,19 @@ mi version
 
 ```bash
 mi -o plain get 台灯 brightness        # 只输出 "60"，可以直接 $(...)
-mi -o json device list | jq '.[] | select(.在线=="是")'
+mi -o json device list | jq '.[] | select(.online)'
 ```
+
+JSON / YAML 输出用英文字段名和原始类型（`"online": true` 而不是「在线: 是」），
+表格里的中文表头只出现在给人看的那一档。
+
+## 给 AI agent 用
+
+仓库里带了一个 [Claude Code skill](.claude/skills/mi-home/SKILL.md)：在本仓库里跑
+Claude Code 会自动加载，它会教 agent 怎么定位设备、查 spec、按退出码分支处理，
+以及控制真实设备时该怎么谨慎（歧义要问、写操作有物理效果、别轮询）。
+
+想全局启用：`cp -r .claude/skills/mi-home ~/.claude/skills/`
 
 退出码：
 
