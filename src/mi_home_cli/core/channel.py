@@ -193,7 +193,7 @@ def open_device_channel(
     profile: Profile,
     device: Device,
     *,
-    mode: str = "auto",
+    mode: str = "cloud",
     on_note: Any = None,
 ) -> DeviceChannel:
     """按 --channel 选一条通道。

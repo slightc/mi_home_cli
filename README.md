@@ -80,7 +80,8 @@ mi lan list                 # 清单里哪些设备支持直连
 mi lan discover             # 广播扫描，缓存 IP
 mi lan status <设备>         # 可达性、IP、延迟
 mi lan raw <设备> miIO.info  # 直接发一条 miIO 请求（排查用）
-mi --channel lan get <设备>  # 强制走局域网；--channel cloud 强制走云端
+mi --channel lan get <设备>  # 走局域网；--channel auto 局域网优先、失败回落云端
+mi config set channel auto  # 想默认走局域网就设这个
 
 mi doctor
 mi version
@@ -112,8 +113,12 @@ done
 网络出口封了 8883 时连不上（公司网、容器里常见），命令会明确报出来。
 
 局域网直连走 miIO 协议（UDP 54321，AES-128-CBC，密钥来自设备 token）。
-默认 `--channel auto`：能直连就直连（延迟从 1~2 秒降到几十毫秒），
-任何一步不成立就静默回落云端——包括**调用本身失败**：有些设备握手正常，却对
+**默认走云端**：局域网要先探活、失败还要回落，首次命中的等待都算在用户头上，
+不该由默认承担。要低延迟就显式 `--channel lan`，或
+`mi config set channel auto` 设成默认。
+
+`--channel auto` 是「能直连就直连（延迟从 1~2 秒降到几十毫秒），任何一步不成立
+就静默回落云端」——包括**调用本身失败**：有些设备握手正常，却对
 `get_properties` 回 `user ack timeout`，这时也会回落，不会把局域网的错误抛给你
 （`-v` 能看到发生了回落）。失败会记进 `lan.json`，后续命令直接走云端，
 7 天后或 `mi lan discover` 之后重新尝试。

@@ -10,7 +10,7 @@
 | `--profile <name>` | 账号/区域配置隔离，默认 `default` |
 | `--region <cn\|de\|i2\|ru\|sg\|us>` | 覆盖当前 profile 的区域 |
 | `-o, --output <table\|json\|yaml\|plain>` | 输出格式，默认 `table`；非 TTY 自动去色 |
-| `--channel <auto\|cloud\|lan>` | 控制通道，默认 `auto`（局域网可达优先，失败回落云端） |
+| `--channel <cloud\|auto\|lan>` | 控制通道，默认 `cloud`；`auto` 为局域网优先、失败回落云端 |
 | `--timeout <sec>` | 单次请求超时，默认 15 |
 | `--no-cache` / `--refresh` | 跳过本地缓存 / 强制刷新缓存 |
 | `--dry-run` | 只解析与校验，不发出真实请求 |
@@ -147,8 +147,9 @@ mi lan status <device>                         # 是否可直连、IP、延迟
 mi lan raw <device> <method> [--params JSON]   # 直接发一条 miIO 请求（排查用）
 ```
 
-控制命令加 `--channel lan` 就走直连，`--channel cloud` 强制走云端；
-默认 `auto` 是「能直连就直连，不成立静默回落云端」。
+控制命令加 `--channel lan` 就走直连，`--channel auto` 是「能直连就直连，
+不成立静默回落云端」。默认是 `cloud`——局域网的探活和回落成本不该由默认承担；
+想默认走局域网用 `mi config set channel auto`。
 
 ## 8. 原始接口 `mi raw`（逃生舱）
 
@@ -164,7 +165,7 @@ mi raw api <METHOD> <path> [--data JSON]        # 直接打云端 API
 ## 9. 其他
 
 ```bash
-mi config list|get|set|unset|path   # profile / region / output / home
+mi config list|get|set|unset|path   # profile / region / output / home / channel
 mi doctor                        # 检查登录态、时钟偏差、网络连通、端口占用、文件权限
 mi --install-completion     # typer 内置，装当前 shell 的补全
 mi repl                          # 交互模式：选中设备后直接 get/set，带 Tab 补全（可选）

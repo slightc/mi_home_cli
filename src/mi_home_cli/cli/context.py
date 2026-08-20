@@ -25,7 +25,9 @@ class AppContext:
     dry_run: bool = False
     all_homes: bool = False
     verify: bool = False
-    channel: str = "auto"
+    # 默认走云端：局域网要先探活、失败还要回落，首次命中的等待都算在用户头上。
+    # 想要低延迟的人显式选 auto/lan，或 `mi config set channel auto`。
+    channel: str = "cloud"
 
     @property
     def profile(self) -> Profile:

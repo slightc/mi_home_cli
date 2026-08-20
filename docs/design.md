@@ -115,7 +115,13 @@ mi_home_cli/
 └── tests/                   # 全部离线，用 httpx.MockTransport 回放
 ```
 
-**关键抽象 `Channel`**：`get_props / set_props / call_action` 三个方法，`CloudChannel` 与 `LanChannel` 都实现它，`AutoChannel` 按「本机有 token + 设备在同网段 + 局域网可达」优先走 LAN、失败回落云端。CLI 层完全不感知走的哪条路（`--channel` 可强制）。
+**关键抽象 `Channel`**：`get_props / set_props / call_action` 三个方法，
+`CloudChannel` 与 `LanChannel` 都实现它，`AutoChannel` 按「本机有 token +
+设备在同网段 + 局域网可达」优先走 LAN、失败回落云端。CLI 层完全不感知走的哪条路。
+
+**默认是 `cloud`**：局域网首次命中要付探活（unicast hello）加一次可能失败的
+调用，这份等待不该由默认承担；想要低延迟的人显式 `--channel lan`，或
+`mi config set channel auto` 设为默认。
 
 ### 3.1 本地存储
 

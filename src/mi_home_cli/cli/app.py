@@ -78,12 +78,13 @@ def main_callback(
         bool, typer.Option("--dry-run", help="只解析和校验，不真的下发")
     ] = False,
     channel: Annotated[
-        str,
+        Optional[str],
         typer.Option(
             "--channel",
-            help="控制通道：auto（局域网优先，回落云端）/ cloud / lan",
+            envvar="MI_CHANNEL",
+            help="控制通道：cloud（默认）/ auto（局域网优先，回落云端）/ lan",
         ),
-    ] = "auto",
+    ] = None,
     all_homes: Annotated[
         bool, typer.Option("--all-homes", help="忽略默认家庭，跨所有家庭操作")
     ] = False,
@@ -108,7 +109,7 @@ def main_callback(
         dry_run=dry_run,
         all_homes=all_homes,
         verify=verify,
-        channel=channel,
+        channel=channel or config.get("channel", "cloud"),
     )
 
 

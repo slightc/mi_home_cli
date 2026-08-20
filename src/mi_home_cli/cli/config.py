@@ -20,7 +20,10 @@ KEYS = {
     "region": "默认区域：" + "/".join(const.CLOUD_SERVERS),
     "output": "默认输出格式：table/json/yaml/plain",
     "home": "默认家庭（等价于 mi home use）",
+    "channel": "默认控制通道：cloud / auto / lan",
 }
+
+CHANNELS = ("cloud", "auto", "lan")
 
 
 def _ctx(ctx: typer.Context) -> AppContext:
@@ -45,6 +48,10 @@ def _coerce(app_ctx: AppContext, key: str, value: str) -> Any:
             return OutputFormat(value).value
         except ValueError as err:
             raise UsageError(f"未知输出格式 `{value}`") from err
+    if key == "channel":
+        if value not in CHANNELS:
+            raise UsageError(f"未知通道 `{value}`，可选：{'、'.join(CHANNELS)}")
+        return value
     if key == "home":
         # 存 id + 名字：按 id 过滤不怕改名，名字用来显示
         from .device import load_registry
