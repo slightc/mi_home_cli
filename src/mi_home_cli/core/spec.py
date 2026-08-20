@@ -257,6 +257,30 @@ class DeviceSpec:
         primary = [item for item in candidates if item.service == self.name]
         return primary if len(primary) == 1 else candidates
 
+    def by_name(
+        self,
+        *names: str,
+        writable: bool | None = None,
+        readable: bool | None = None,
+    ) -> Property | None:
+        """按 spec 里的标准属性名找属性，找不到返回 None。
+
+        属性的 urn 名（on / brightness / color-temperature …）是 MIoT 规范
+        统一的，语义命令就靠它跨型号工作。names 按优先级给，先命中先用。
+        """
+        for name in names:
+            candidates = [
+                prop
+                for prop in self.properties
+                if prop.name == name
+                and (writable is None or prop.writable == writable)
+                and (readable is None or prop.readable == readable)
+            ]
+            candidates = self._prefer_primary(candidates)
+            if candidates:
+                return min(candidates, key=lambda p: (p.siid, p.piid))
+        return None
+
     def property_at(self, siid: int, piid: int) -> Property | None:
         for prop in self.properties:
             if prop.siid == siid and prop.piid == piid:

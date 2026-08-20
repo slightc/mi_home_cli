@@ -110,9 +110,14 @@ mi action 音箱 play-control.play --param volume=30
 mi action list <device>                # 列出该设备所有可调用动作
 ```
 
-## 6. 语义快捷命令（M3）
+## 6. 语义快捷命令
 
-在 spec 之上做的一层「人话映射」，找不到对应属性时报错并提示用 `mi set`：
+在 spec 之上的一层「人话映射」。能跨型号工作是因为 MIoT spec 里属性的 urn 名
+是标准化的（`on`、`brightness`、`color-temperature`、`target-temperature`、
+`fan-level`、`motor-control`…），语义层只认名字不认型号。
+
+设备没有对应属性时直接报错并提示去 `mi spec show --writable` 查，不会默默忽略。
+不带任何选项时显示这台设备的当前状态。
 
 ```bash
 mi on <device>          # 等价于把该设备的 on 属性置 true
@@ -149,7 +154,7 @@ mi raw api <METHOD> <path> [--data JSON]        # 直接打云端 API
 ```bash
 mi config get|set|list|path      # region / output / channel / timeout / cache TTL
 mi doctor                        # 检查登录态、时钟偏差、网络连通、端口占用、文件权限
-mi completion bash|zsh|fish
+mi --install-completion     # typer 内置，装当前 shell 的补全
 mi repl                          # 交互模式：选中设备后直接 get/set，带 Tab 补全（可选）
 mi version
 ```

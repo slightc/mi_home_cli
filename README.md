@@ -60,6 +60,12 @@ mi set <设备> <属性=值>...
 mi action <设备> [动作] [--in 值]...
 mi on|off|toggle <设备>
 
+# 语义命令（不带选项时显示当前状态）
+mi light <设备> [--on|--off] [--brightness 60] [--ct 4000] [--color 红] [--mode 日光]
+mi climate <设备> [--on|--off] [--mode 制冷] [--temp 26] [--fan 2]
+mi cover <设备> [--open|--close|--stop] [--position 50]
+mi fan <设备> [--on|--off] [--speed 2] [--mode 自动] [--swing]
+
 mi doctor
 mi version
 ```
@@ -67,6 +73,11 @@ mi version
 设备可以用名称、别名、`房间/名称`、did 或型号来指；属性可以写 `on`、
 `light.brightness` 或 `2.1`，枚举值可以直接写中文描述（`mode=睡眠`）。
 加 `--dry-run` 只解析校验不下发，加 `-o json` 输出给脚本用。
+
+写操作会把「旧值 → 新值」一起打出来，改错了照着回滚就行。
+
+Shell 补全用 typer 内置的：`mi --install-completion`（或 `mi --show-completion`
+自己贴进 rc 文件）。
 
 局域网控制和 `mi watch` 还没做，见 [docs/cli-spec.md](docs/cli-spec.md)。
 

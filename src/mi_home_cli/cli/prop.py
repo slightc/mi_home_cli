@@ -9,7 +9,13 @@ from .. import render
 from ..core.cloud import CloudApi
 from ..core.registry import Device
 from ..core.spec import DeviceSpec, Property, format_value, parse_value
-from ..errors import CloudError, InvalidValue, SpecNotFound, UsageError
+from ..errors import (
+    CloudError,
+    InvalidValue,
+    MiCliError,
+    SpecNotFound,
+    UsageError,
+)
 from ..render import OutputFormat
 from .context import AppContext, OutputOption, pick_output
 from .device import resolve
@@ -25,6 +31,30 @@ def _target(app_ctx: AppContext, ref: str) -> tuple[Device, DeviceSpec]:
     if device is None:  # load_spec 只有传 urn 时才会是 None
         raise UsageError("这里需要一台具体设备，不能只给 urn")
     return device, spec
+
+
+def read_current(
+    api: CloudApi, did: str, props: list[Property]
+) -> dict[tuple[int, int], Any]:
+    """写之前先读一遍旧值。
+
+    多一次请求换「旧值 → 新值」的可读性，也让误操作能照着恢复。读不到就
+    算了，不因此挡住写入。
+    """
+    readable = [p for p in props if p.readable]
+    if not readable:
+        return {}
+    try:
+        results = api.get_props(
+            [{"did": did, "siid": p.siid, "piid": p.piid} for p in readable]
+        )
+    except MiCliError:
+        return {}
+    return {
+        (item["siid"], item["piid"]): item.get("value")
+        for item in results
+        if item.get("code") == 0 and "siid" in item and "piid" in item
+    }
 
 
 def _explain_code(code: int) -> str:
@@ -144,7 +174,9 @@ def set_(
         return
 
     with app_ctx.session() as session:
-        results = CloudApi(session).set_props(params)
+        api = CloudApi(session)
+        before = read_current(api, target.did, props)
+        results = api.set_props(params)
 
     by_key = {(item.get("siid"), item.get("piid")): item for item in results}
     rows = []
@@ -152,10 +184,12 @@ def set_(
     for prop, param in zip(props, params):
         code = int(by_key.get((prop.siid, prop.piid), {}).get("code", -1))
         failed = failed or code != 0
+        old = before.get((prop.siid, prop.piid))
         rows.append(
             {
                 "属性": prop.full_name,
-                "写入值": format_value(prop, param["value"]),
+                "旧值": format_value(prop, old) if old is not None else "-",
+                "新值": format_value(prop, param["value"]),
                 "结果": _explain_code(code),
             }
         )

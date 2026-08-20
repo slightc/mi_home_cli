@@ -243,7 +243,8 @@ CLI 的体验成败不在协议，在于**别让人记 did 和 siid/piid**。
 ## 5. 输出与错误
 
 - 默认 `table`（rich，自动适配终端宽度）；`-o json` 输出稳定 schema，**保证可被 `jq` 消费**（管道非 TTY 时自动关闭颜色）；另有 `-o yaml` / `-o plain`（只输出值，方便 `$(...)`）。
-- 所有写操作打印「设备 → 属性 → 旧值 → 新值 → 结果」。`--dry-run` 只解析不发请求，用于确认解析对不对。
+- 所有写操作打印「属性 → 旧值 → 新值 → 结果」：写之前先批量读一次旧值，
+  多一次请求换来「改错了能照着回滚」。`--dry-run` 只解析不发请求，用于确认解析对不对。
 - 退出码：`0` 成功 / `1` 通用错误 / `2` 参数错误 / `3` 设备不存在 / `4` 引用有歧义 / `5` 设备离线 / `6` 属性或 action 不存在 / `7` 值非法 / `8` 网络错误 / `9` 云端返回错误 / `10` 未登录或 token 失效。
 - 错误信息把小米返回的 `code/message` 原样附在末尾（`--verbose` 时打印完整请求响应）。
 
@@ -255,7 +256,7 @@ CLI 的体验成败不在协议，在于**别让人记 did 和 siid/piid**。
 | --- | --- | --- |
 | **M1 打通** | ✅ OAuth 登录（本地回调 + mDNS + `--manual` 兜底）、token 存储/刷新、`auth *`、`profile *`、`doctor` | 能登录 |
 | **M2 控制** | ✅ `home/room/device list`、设备清单缓存与解析、spec 拉取与缓存、`spec show/search/dump`、`get`/`set`/`action`、值转换、`on/off/toggle`、`-o json`、`--dry-run` | 核心可用 |
-| **M3 顺手** | `light`/`climate`/`cover`/`fan` 等语义命令、`device alias`（✅ 已有）、shell 补全 | 日常能用 |
+| **M3 顺手** | ✅ `light`/`climate`/`cover`/`fan` 语义命令、`device alias`、写操作显示旧值→新值、shell 补全（typer 内置） | 日常能用 |
 | **M4 实时** | 云端 MQTT `watch`（属性/事件/在线状态），`--follow` 流式输出 | 可做脚本触发 |
 | **M5 本地** | 局域网通道（`python-miio`）、`lan discover`、`AutoChannel` 回落 | 低延迟、断网可用 |
 | 可选 | `repl` 交互模式、场景（`/app/v2/scene/*` 需自行探索验证，上游未使用）、中枢网关控制 | — |
