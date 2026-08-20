@@ -75,6 +75,12 @@ mi climate <设备> [--on|--off] [--mode 制冷] [--temp 26] [--fan 2]
 mi cover <设备> [--open|--close|--stop] [--position 50]
 mi fan <设备> [--on|--off] [--speed 2] [--mode 自动] [--swing]
 
+# 局域网直连（只对直连路由器的 WiFi 设备有效）
+mi lan list                 # 清单里哪些设备支持直连
+mi lan discover             # 广播扫描，缓存 IP
+mi lan status <设备>         # 可达性、IP、延迟
+mi --channel lan get <设备>  # 强制走局域网；--channel cloud 强制走云端
+
 mi doctor
 mi version
 ```
@@ -104,7 +110,14 @@ done
 
 网络出口封了 8883 时连不上（公司网、容器里常见），命令会明确报出来。
 
-局域网控制（M5）还没做，见 [docs/cli-spec.md](docs/cli-spec.md)。
+局域网直连走 miIO 协议（UDP 54321，AES-128-CBC，密钥来自设备 token）。
+默认 `--channel auto`：能直连就直连（延迟从 1~2 秒降到几十毫秒），
+任何一步不成立就静默回落云端。只有 `connect_type` 在 `{0,8,12,23}` 且有 token
+的设备可以直连——蓝牙 Mesh、ZigBee 那些经网关接入的走不了，`mi lan list` 能看出
+哪些可以。
+
+macOS 14+ 需要在 `系统设置 → 隐私与安全性 → 本地网络` 里放行终端，否则广播会被
+静默丢弃。
 
 全局参数（`--profile` / `--region` / `--output` / `--timeout`）放在子命令之前，
 例如 `mi -o json auth status`；`-o` 也可以直接跟在子命令后面，或用环境变量

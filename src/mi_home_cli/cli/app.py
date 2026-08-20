@@ -15,6 +15,7 @@ from ..store import config_dir, read_config
 from . import auth as auth_cli
 from . import config as config_cli
 from . import device as device_cli
+from . import lan as lan_cli
 from . import prop as prop_cli
 from . import semantic as semantic_cli
 from . import spec_cmd as spec_cli
@@ -34,6 +35,7 @@ app.add_typer(device_cli.home_app, name="home")
 app.add_typer(device_cli.room_app, name="room")
 app.add_typer(spec_cli.app, name="spec")
 app.add_typer(config_cli.app, name="config")
+app.add_typer(lan_cli.app, name="lan")
 
 # 高频命令挂在顶层：mi get / mi set / mi action / mi on|off|toggle
 app.command("get")(prop_cli.get)
@@ -75,6 +77,13 @@ def main_callback(
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="只解析和校验，不真的下发")
     ] = False,
+    channel: Annotated[
+        str,
+        typer.Option(
+            "--channel",
+            help="控制通道：auto（局域网优先，回落云端）/ cloud / lan",
+        ),
+    ] = "auto",
     all_homes: Annotated[
         bool, typer.Option("--all-homes", help="忽略默认家庭，跨所有家庭操作")
     ] = False,
@@ -99,6 +108,7 @@ def main_callback(
         dry_run=dry_run,
         all_homes=all_homes,
         verify=verify,
+        channel=channel,
     )
 
 

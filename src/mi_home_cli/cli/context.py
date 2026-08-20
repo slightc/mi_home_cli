@@ -25,6 +25,7 @@ class AppContext:
     dry_run: bool = False
     all_homes: bool = False
     verify: bool = False
+    channel: str = "auto"
 
     @property
     def profile(self) -> Profile:

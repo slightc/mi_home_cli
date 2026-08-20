@@ -92,7 +92,13 @@ class Device:
             room_name=data.get("room_name", "") or "",
             token=data.get("token"),
             local_ip=data.get("local_ip"),
-            connect_type=int(data.get("connect_type", -1) or -1),
+            # 不能写成 `x or -1`：WiFi 直连设备的 connect_type 就是 0，
+            # 会被 or 当成假值吞掉，进而误判成不能局域网直连
+            connect_type=(
+                int(data["connect_type"])
+                if data.get("connect_type") is not None
+                else -1
+            ),
             manufacturer=data.get("manufacturer", ""),
             fw_version=data.get("fw_version"),
             parent_id=data.get("parent_id"),

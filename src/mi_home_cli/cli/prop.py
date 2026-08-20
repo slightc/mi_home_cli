@@ -7,8 +7,9 @@ from typing import Annotated, Any, Optional
 import typer
 
 from .. import render
-from ..core.cloud import CloudApi
+from ..core.channel import DeviceChannel, open_device_channel
 from ..core.registry import Device
+from ..core.session import Session
 from ..core.spec import DeviceSpec, Property, format_value, parse_value
 from ..errors import (
     CloudError,
@@ -27,6 +28,19 @@ def _ctx(ctx: typer.Context) -> AppContext:
     return ctx.obj
 
 
+def _channel(
+    app_ctx: AppContext, session: Session, device: Device
+) -> DeviceChannel:
+    """按 --channel 打开控制通道。"""
+    return open_device_channel(
+        session,
+        app_ctx.profile,
+        device,
+        mode=app_ctx.channel,
+        on_note=render.info if app_ctx.verbose else None,
+    )
+
+
 def _target(app_ctx: AppContext, ref: str) -> tuple[Device, DeviceSpec]:
     device, spec = load_spec(app_ctx, ref)
     if device is None:  # load_spec 只有传 urn 时才会是 None
@@ -35,7 +49,7 @@ def _target(app_ctx: AppContext, ref: str) -> tuple[Device, DeviceSpec]:
 
 
 def read_current(
-    api: CloudApi, did: str, props: list[Property]
+    api: DeviceChannel, did: str, props: list[Property]
 ) -> dict[tuple[int, int], Any]:
     """写之前先读一遍旧值。
 
@@ -76,7 +90,7 @@ def _explain_code(code: int) -> str:
 
 
 def verify_after_write(
-    api: CloudApi,
+    api: DeviceChannel,
     did: str,
     expected: list[tuple[Property, Any]],
     *,
@@ -138,7 +152,7 @@ def get(
             raise SpecNotFound(f"{target.label} 没有可读属性")
 
     with app_ctx.session() as session:
-        results = CloudApi(session).get_props(
+        results = _channel(app_ctx, session, target).get_props(
             [{"did": target.did, "siid": p.siid, "piid": p.piid} for p in wanted]
         )
 
@@ -221,7 +235,7 @@ def set_(
         return
 
     with app_ctx.session() as session:
-        api = CloudApi(session)
+        api = _channel(app_ctx, session, target)
         before = read_current(api, target.did, props)
         results = api.set_props(params)
         actual = (
@@ -318,7 +332,7 @@ def action(
         return
 
     with app_ctx.session() as session:
-        result = CloudApi(session).call_action(
+        result = _channel(app_ctx, session, target).call_action(
             target.did, target_action.siid, target_action.aiid, parsed
         )
     code = int(result.get("code", -1))
@@ -351,7 +365,7 @@ def _switch(app_ctx: AppContext, device: str, value: bool | None) -> None:
     # 多个服务都有 on 时（比如带夜灯的灯），取 siid 最小的主服务
     prop = min(candidates, key=lambda p: (p.siid, p.piid))
     with app_ctx.session() as session:
-        api = CloudApi(session)
+        api = _channel(app_ctx, session, target)
         if value is None:
             current = api.get_props(
                 [{"did": target.did, "siid": prop.siid, "piid": prop.piid}]

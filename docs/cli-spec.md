@@ -138,13 +138,16 @@ mi cover <device> [--open|--close|--stop|--position 50]
 mi fan <device> [--on|--off] [--speed 3] [--swing]
 ```
 
-## 7. 局域网 `mi lan`（M5）
+## 7. 局域网 `mi lan`
 
 ```bash
-mi lan discover [--iface eth0] [--timeout 5]   # UDP 广播扫同网段设备
-mi lan status <device>                          # 是否可直连、IP、延迟
-mi lan get/set/action ...                       # 等价于 --channel lan
+mi lan list                                    # 清单里哪些设备支持直连
+mi lan discover [--timeout 3] [--address ...]  # UDP 广播扫描并缓存 IP
+mi lan status <device>                         # 是否可直连、IP、延迟
 ```
+
+控制命令加 `--channel lan` 就走直连，`--channel cloud` 强制走云端；
+默认 `auto` 是「能直连就直连，不成立静默回落云端」。
 
 ## 8. 原始接口 `mi raw`（逃生舱）
 

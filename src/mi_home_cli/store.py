@@ -169,6 +169,16 @@ class Profile:
         # 设备清单里带局域网 token，按凭据同等对待
         _write_private_json(self.devices_path, data)
 
+    @property
+    def lan_path(self) -> Path:
+        return self.path / "lan.json"
+
+    def read_lan(self) -> dict[str, Any]:
+        return _read_json(self.lan_path) or {}
+
+    def write_lan(self, data: dict[str, Any]) -> None:
+        _write_private_json(self.lan_path, data)
+
     def read_aliases(self) -> dict[str, str]:
         return _read_json(self.aliases_path) or {}
 

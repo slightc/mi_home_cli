@@ -131,6 +131,8 @@ mi_home_cli/
 
 - 含密文件一律 `0600`，目录 `0700`；启动时校验权限，不对就警告。
 - 局域网 token 默认在任何输出里打码，`--show-secrets` 才明文。
+- 局域网地址缓存在 `lan.json`（did → IP + 发现时间），命中时先发一个 unicast
+  hello 确认（几十毫秒），失败才重新广播扫描。
 - 支持 `MI_HOME_CONFIG_DIR` 环境变量覆盖；支持 `--profile` 管理多账号/多区域。
 
 ### 3.2 登录流程（CLI 版本的难点）
@@ -272,7 +274,7 @@ CLI 的体验成败不在协议，在于**别让人记 did 和 siid/piid**。
 | **M2 控制** | ✅ `home/room/device list`、设备清单缓存与解析、spec 拉取与缓存、`spec show/search/dump`、`get`/`set`/`action`、值转换、`on/off/toggle`、`-o json`、`--dry-run` | 核心可用 |
 | **M3 顺手** | ✅ `light`/`climate`/`cover`/`fan` 语义命令、`device alias`、写操作显示旧值→新值、shell 补全（typer 内置） | 日常能用 |
 | **M4 实时** | ✅ 云端 MQTT `watch`（属性/事件/上下线），流式输出、逐行 JSON | 可做脚本触发 |
-| **M5 本地** | 局域网通道（`python-miio`）、`lan discover`、`AutoChannel` 回落 | 低延迟、断网可用 |
+| **M5 本地** | ✅ 局域网通道（自行实现 miIO）、`lan list/discover/status`、`--channel auto\|cloud\|lan` 回落 | 低延迟、断网可用 |
 | 可选 | `repl` 交互模式、场景（`/app/v2/scene/*` 需自行探索验证，上游未使用）、中枢网关控制 | — |
 
 ## 7. 测试策略
@@ -288,5 +290,8 @@ CLI 的体验成败不在协议，在于**别让人记 did 和 siid/piid**。
 2. **`redirect_uri` 白名单**：已实测确认 host 锁死在 `homeassistant.local:8123`
    （见 3.2）。小米若调整白名单，自动回调会失效，粘贴方式不受影响。
 3. **频率限制**：批量读属性要沿用「聚合 + 单请求 ≤150 条」的策略，`watch` 用 MQTT 而不是轮询。
-4. **局域网覆盖有限**：只对直连 WiFi 设备有效，且上游文档提示该功能可能引发异常，因此默认关闭，`--channel lan` 或配置开启。
+4. **局域网覆盖有限**：只有 `connect_type ∈ {0,8,12,23}` 且有 token 的设备
+   （直连路由器的 WiFi/有线设备）可以直连；蓝牙 Mesh、ZigBee 走网关的不行。
+   实测某账号 72 台设备里只有 21 台够格。`--channel auto` 会在任何一步不成立时
+   静默回落云端，所以覆盖有限不影响可用性。
 5. **凭据安全**：device token 等价于局域网控制权，文件权限 + 输出打码 + 不写日志三重防护。

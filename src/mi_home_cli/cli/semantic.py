@@ -10,7 +10,6 @@ from typing import Annotated, Any, Optional
 import typer
 
 from .. import render
-from ..core.cloud import CloudApi
 from ..core.registry import Device
 from ..core.semantic import STATUS_PROPERTIES, Planner, format_color, parse_color
 from ..core.spec import DeviceSpec, format_value
@@ -18,6 +17,7 @@ from ..errors import CloudError
 from .context import AppContext, OutputOption, pick_output
 from .prop import (
     ACCEPTED_CODES,
+    _channel,
     _explain_code,
     _target,
     read_current,
@@ -47,7 +47,7 @@ def _show_status(
         render.warn(f"{device.label} 没有可读的状态属性")
         return
     with app_ctx.session() as session:
-        results = CloudApi(session).get_props(
+        results = _channel(app_ctx, session, device).get_props(
             [{"did": device.did, "siid": p.siid, "piid": p.piid} for p in props]
         )
     by_key = {(item.get("siid"), item.get("piid")): item for item in results}
@@ -86,7 +86,7 @@ def _apply(
         return
 
     with app_ctx.session() as session:
-        api = CloudApi(session)
+        api = _channel(app_ctx, session, device)
         before = read_current(
             api, device.did, [change.prop for change in planner.changes]
         )

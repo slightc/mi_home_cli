@@ -146,3 +146,34 @@ def test_default_home_scope_removes_ambiguity():
     with pytest.raises(AmbiguousReference):
         registry.resolve("台灯")
     assert registry.resolve("台灯", home_id="h1").did == "1"
+
+
+def test_connect_type_zero_survives():
+    """WiFi 直连设备的 connect_type 是 0，不能被 `or -1` 之类的写法吞掉——
+
+    吞了就会把所有 WiFi 设备误判成不支持局域网直连。
+    """
+    from mi_home_cli.core.channel import lan_capable
+    from mi_home_cli.core.registry import Device
+
+    device = Device.load(
+        {"did": "1", "name": "灯", "model": "m", "urn": "u", "online": True,
+         "connect_type": 0, "token": "a" * 32}
+    )
+    assert device.connect_type == 0
+    assert lan_capable(device)
+
+    mesh = Device.load(
+        {"did": "2", "name": "灯", "model": "m", "urn": "u", "online": True,
+         "connect_type": 16, "token": "a" * 32}
+    )
+    assert not lan_capable(mesh)
+
+    no_token = Device.load(
+        {"did": "3", "name": "灯", "model": "m", "urn": "u", "online": True,
+         "connect_type": 0}
+    )
+    assert not lan_capable(no_token)
+
+    missing = Device.load({"did": "4", "name": "灯", "model": "m", "urn": "u"})
+    assert missing.connect_type == -1
