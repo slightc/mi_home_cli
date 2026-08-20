@@ -164,20 +164,31 @@ class CloudMqtt:
         # 连不上时把真正的原因记下来：TCP 不通、TLS 握手失败、认证被拒，
         # 这三种问题排查方向完全不同，压成一句「超时」等于没说
         self._failure: str | None = None
-        self._client = mqtt.Client(
+        self._contexts = ssl_contexts()
+        self._client_id = client_id
+        self._debug = debug
+        self._client = self._build_client(self._contexts[0])
+
+    def _build_client(self, context: ssl.SSLContext) -> mqtt.Client:
+        """新建一个配好 TLS 和回调的客户端。
+
+        每换一个证书库都得新建：paho 的 tls_set_context 只能调一次，第二次
+        直接抛 ValueError。
+        """
+        client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
-            client_id=client_id,
+            client_id=self._client_id,
             protocol=mqtt.MQTTv5,
         )
-        self._contexts = ssl_contexts()
-        self._client.tls_set_context(self._contexts[0])
-        if debug:
+        client.tls_set_context(context)
+        if self._debug:
             # paho 自己的日志能把 TLS 握手和 CONNACK 的细节打出来
-            self._client.enable_logger()
-        self._client.on_connect = self._handle_connect
-        self._client.on_connect_fail = self._handle_connect_fail
-        self._client.on_disconnect = self._handle_disconnect
-        self._client.on_message = self._handle_message
+            client.enable_logger()
+        client.on_connect = self._handle_connect
+        client.on_connect_fail = self._handle_connect_fail
+        client.on_disconnect = self._handle_disconnect
+        client.on_message = self._handle_message
+        return client
 
     # ---------- 回调 ----------
 
@@ -232,7 +243,12 @@ class CloudMqtt:
         # 而证书校验失败这类问题必须把原文给用户看
         last_error: ssl.SSLCertVerificationError | None = None
         for index, context in enumerate(self._contexts):
-            self._client.tls_set_context(context)
+            if index:
+                # 换证书库必须换客户端，paho 的 TLS 配置是一次性的
+                self._client = self._build_client(context)
+                self._client.username_pw_set(
+                    const.CLIENT_ID, self._token_provider()
+                )
             try:
                 self._client.connect(host, BROKER_PORT, KEEPALIVE)
                 if index and self._on_note:

@@ -240,3 +240,51 @@ def test_explicit_bundle_is_the_only_candidate(monkeypatch, tmp_path):
     bundle.write_text(open(certifi.where(), encoding="utf-8").read(), encoding="utf-8")
     monkeypatch.setenv(module.CA_BUNDLE_ENV, str(bundle))
     assert len(module.ssl_contexts()) == 1
+
+
+def test_new_client_per_ca_attempt(monkeypatch):
+    """换证书库必须换客户端：paho 的 tls_set_context 只能调一次，
+
+    第二次抛 ValueError('SSL/TLS has already been configured.')，
+    在同一个客户端上重试等于白写。
+    """
+    import ssl as _ssl
+
+    from mi_home_cli.core.mqtt import CloudMqtt
+
+    built: list[FakeClient] = []
+
+    class Tracking(FakeClient):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.tls_calls = 0
+            built.append(self)
+
+        def tls_set_context(self, context):
+            self.tls_calls += 1
+            if self.tls_calls > 1:
+                raise ValueError("SSL/TLS has already been configured.")
+
+        def connect(self, host, port, keepalive):
+            # 第一个客户端（系统 CA）验不过，第二个（certifi）成功
+            if len(built) == 1:
+                raise _ssl.SSLCertVerificationError("certificate verify failed")
+            self.on_connect(self, None, None, None)
+
+    import mi_home_cli.core.mqtt as module
+
+    monkeypatch.setattr(module.mqtt, "Client", Tracking)
+    notes: list[str] = []
+    client = CloudMqtt(
+        region="cn",
+        client_id="ha.abc",
+        token_provider=lambda: "AT",
+        on_note=notes.append,
+    )
+    client.subscribe(["device/d1/state/#"])
+    client.start(timeout=2)
+    assert len(built) == 2, "第二次尝试没有新建客户端"
+    assert all(item.tls_calls == 1 for item in built)
+    assert "certifi" in notes[0]
+    # 新客户端也要把订阅补上
+    assert built[1].subscribed == ["device/d1/state/#"]
