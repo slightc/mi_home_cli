@@ -240,3 +240,21 @@ def _client_replaying(messages):
                 )
 
     return Replay
+
+
+def test_write_flags_work_after_subcommand(env):
+    """`mi set 灯 on=true --dry-run` 是任何人和任何 agent 都会自然写出的形式。
+
+    实测中一个 agent 正是这么写的，而当时 --dry-run 只能放在子命令之前，
+    于是它直接把真实写入发了出去。
+    """
+    result = CliRunner().invoke(
+        app, ["set", "客厅灯", "brightness=60", "--dry-run"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "dry-run" in result.output
+
+    # 语义命令、on/off 上同样要有
+    assert "--dry-run" in CliRunner().invoke(app, ["light", "--help"]).output
+    assert "--verify" in CliRunner().invoke(app, ["on", "--help"]).output
+    assert "--dry-run" in CliRunner().invoke(app, ["action", "--help"]).output

@@ -19,7 +19,14 @@ from ..errors import (
     UsageError,
 )
 from ..render import OutputFormat
-from .context import AppContext, OutputOption, pick_output
+from .context import (
+    AppContext,
+    DryRunOption,
+    OutputOption,
+    VerifyOption,
+    apply_write_flags,
+    pick_output,
+)
 from .device import resolve
 from .spec_cmd import describe_action_inputs, load_spec
 
@@ -223,10 +230,12 @@ def set_(
     assignments: Annotated[
         list[str], typer.Argument(help="属性=值，可以写多个，如 on=true brightness=60")
     ],
+    dry_run: DryRunOption = None,
+    verify: VerifyOption = None,
     output: OutputOption = None,
 ) -> None:
     """写属性。"""
-    app_ctx = _ctx(ctx)
+    app_ctx = apply_write_flags(_ctx(ctx), dry_run, verify)
     target, spec = _target(app_ctx, device)
 
     params: list[dict[str, Any]] = []
@@ -315,10 +324,11 @@ def action(
     values: Annotated[
         Optional[list[str]], typer.Option("--in", help="按顺序传入参，可重复")
     ] = None,
+    dry_run: DryRunOption = None,
     output: OutputOption = None,
 ) -> None:
     """调用动作。不指定动作名就列出这台设备支持的动作。"""
-    app_ctx = _ctx(ctx)
+    app_ctx = apply_write_flags(_ctx(ctx), dry_run)
     target, spec = _target(app_ctx, device)
     fmt = pick_output(app_ctx, output)
 
@@ -437,22 +447,25 @@ def _switch(app_ctx: AppContext, device: str, value: bool | None) -> None:
 def on(
     ctx: typer.Context,
     device: Annotated[str, typer.Argument(help="设备名称、别名或 did")],
+    verify: VerifyOption = None,
 ) -> None:
     """打开设备。"""
-    _switch(_ctx(ctx), device, True)
+    _switch(apply_write_flags(_ctx(ctx), verify=verify), device, True)
 
 
 def off(
     ctx: typer.Context,
     device: Annotated[str, typer.Argument(help="设备名称、别名或 did")],
+    verify: VerifyOption = None,
 ) -> None:
     """关闭设备。"""
-    _switch(_ctx(ctx), device, False)
+    _switch(apply_write_flags(_ctx(ctx), verify=verify), device, False)
 
 
 def toggle(
     ctx: typer.Context,
     device: Annotated[str, typer.Argument(help="设备名称、别名或 did")],
+    verify: VerifyOption = None,
 ) -> None:
     """切换开关。"""
-    _switch(_ctx(ctx), device, None)
+    _switch(apply_write_flags(_ctx(ctx), verify=verify), device, None)

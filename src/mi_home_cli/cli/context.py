@@ -87,3 +87,26 @@ def pick_output(
     if default and ctx.output is OutputFormat.table:
         return default
     return ctx.output
+
+
+# 写操作的两个开关同样重复声明在子命令上。`mi set 灯 on=true --dry-run` 是任何人
+# （和任何 agent）都会自然写出的形式，只能放在子命令前面属于反直觉。
+DryRunOption = Annotated[
+    Optional[bool],
+    typer.Option("--dry-run/--no-dry-run", help="只解析和校验，不真的下发"),
+]
+VerifyOption = Annotated[
+    Optional[bool],
+    typer.Option("--verify/--no-verify", help="写入后回读确认真实状态"),
+]
+
+
+def apply_write_flags(
+    ctx: AppContext, dry_run: bool | None = None, verify: bool | None = None
+) -> AppContext:
+    """子命令上的开关覆盖全局值。"""
+    if dry_run is not None:
+        ctx.dry_run = dry_run
+    if verify is not None:
+        ctx.verify = verify
+    return ctx
