@@ -258,3 +258,15 @@ def test_write_flags_work_after_subcommand(env):
     assert "--dry-run" in CliRunner().invoke(app, ["light", "--help"]).output
     assert "--verify" in CliRunner().invoke(app, ["on", "--help"]).output
     assert "--dry-run" in CliRunner().invoke(app, ["action", "--help"]).output
+
+
+def test_on_off_toggle_support_dry_run(env):
+    """一个 agent 想先预演 `mi off 台灯` 却发现只有 mi set 支持 --dry-run。
+
+    写操作的开关要一致，否则 agent 会退而直接下发真实指令。
+    """
+    for command in ("on", "off", "toggle"):
+        result = CliRunner().invoke(app, [command, "客厅灯", "--dry-run"])
+        assert result.exit_code == 0, result.output
+        assert "dry-run" in result.output
+        assert "light.on" in result.output
