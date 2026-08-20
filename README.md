@@ -368,6 +368,10 @@ uv run pytest
 设计与协议细节见 [docs/design.md](docs/design.md)，完整命令参考见
 [docs/cli-spec.md](docs/cli-spec.md)。
 
+## 许可
+
+[MIT](LICENSE)。
+
 ## 声明
 
 本项目与小米公司无关，`app/v2/*` 这些接口是小米提供给 Home Assistant 集成使用的，
