@@ -6,7 +6,11 @@ from __future__ import annotations
 
 
 class MiCliError(Exception):
-    """所有可预期错误的基类，携带退出码。"""
+    """所有可预期错误的基类，携带退出码。
+
+    退出码由异常自己带着，cli/app.py 的 main() 负责打印并按它退出。
+    （不继承 click 的异常：typer 0.27 起把 click 内置成了私有模块。）
+    """
 
     exit_code: int = 1
 

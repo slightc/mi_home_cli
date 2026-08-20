@@ -18,6 +18,7 @@ from . import device as device_cli
 from . import prop as prop_cli
 from . import semantic as semantic_cli
 from . import spec_cmd as spec_cli
+from . import watch as watch_cli
 from . import doctor as doctor_cli
 from .context import AppContext, OutputOption, default_profile_name
 
@@ -41,6 +42,7 @@ app.command("action")(prop_cli.action)
 app.command("on")(prop_cli.on)
 app.command("off")(prop_cli.off)
 app.command("toggle")(prop_cli.toggle)
+app.command("watch")(watch_cli.watch)
 app.command("light")(semantic_cli.light)
 app.command("climate")(semantic_cli.climate)
 app.command("cover")(semantic_cli.cover)

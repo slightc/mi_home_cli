@@ -64,7 +64,9 @@
 
 ### 1.4 实时推送
 
-云端 MQTT（`ha.mqtt.io.mi.com`，用户名 uid、密码 access_token），订阅：
+云端 MQTT：`{区域}-ha.mqtt.io.mi.com:8883`，TLS + MQTT v5，
+**用户名是 OAuth 的 client_id、密码是 access_token**，
+client_id 就是 OAuth 用的那个 `ha.{32 位 hex}`。订阅：
 
 - 属性变化：`device/{did}/up/properties_changed/{siid}/{piid}`（或 `#`）
 - 事件：`device/{did}/up/event_occured/{siid}/{eiid}`（上游此处拼写就是 `occured`）
@@ -263,7 +265,7 @@ CLI 的体验成败不在协议，在于**别让人记 did 和 siid/piid**。
 | **M1 打通** | ✅ OAuth 登录（本地回调 + mDNS + `--manual` 兜底）、token 存储/刷新、`auth *`、`profile *`、`doctor` | 能登录 |
 | **M2 控制** | ✅ `home/room/device list`、设备清单缓存与解析、spec 拉取与缓存、`spec show/search/dump`、`get`/`set`/`action`、值转换、`on/off/toggle`、`-o json`、`--dry-run` | 核心可用 |
 | **M3 顺手** | ✅ `light`/`climate`/`cover`/`fan` 语义命令、`device alias`、写操作显示旧值→新值、shell 补全（typer 内置） | 日常能用 |
-| **M4 实时** | 云端 MQTT `watch`（属性/事件/在线状态），`--follow` 流式输出 | 可做脚本触发 |
+| **M4 实时** | ✅ 云端 MQTT `watch`（属性/事件/上下线），流式输出、逐行 JSON | 可做脚本触发 |
 | **M5 本地** | 局域网通道（`python-miio`）、`lan discover`、`AutoChannel` 回落 | 低延迟、断网可用 |
 | 可选 | `repl` 交互模式、场景（`/app/v2/scene/*` 需自行探索验证，上游未使用）、中枢网关控制 | — |
 

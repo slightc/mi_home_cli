@@ -127,6 +127,11 @@ def raw(text: str) -> None:
     err_console.print(text, soft_wrap=True, highlight=False, markup=False)
 
 
+def stream(message: str) -> None:
+    """流式输出的一行，走 stdout（要能被管道接住）。"""
+    console.print(message, highlight=False, soft_wrap=True)
+
+
 def info(message: str) -> None:
     err_console.print(message)
 

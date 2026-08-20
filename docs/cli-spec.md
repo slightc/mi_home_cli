@@ -96,12 +96,17 @@ mi set <device> <prop=value>...        # 支持一次多条，同一请求批量
 mi set 客厅灯 on=true brightness=60
 mi set 空调 mode=制冷 target-temperature=26
 
-mi watch [device...] [--all] [--prop P]... [--events] [--state] [--since]
-                     [-o json] [--exit-after N]
+mi watch [device...] [--prop P]... [--events/--no-events] [--state/--no-state]
+                     [--exit-after N] [--duration 秒] [-o json]
 ```
 
 - 值写法：`on/off/true/false/1/0`、数字、枚举描述文本、`"带空格的字符串"`。
-- `watch` 走云端 MQTT 长连接，每行一条 JSON/表格记录，`Ctrl-C` 退出；`--exit-after N` 收到 N 条后退出，便于脚本等待某个事件。
+- `watch` 走云端 MQTT 长连接，一条变化一行，`Ctrl-C` 退出。不指定设备就盯默认
+  家庭里的全部设备。
+- `--exit-after N` 收到 N 条后退出、`--duration` 盯多少秒后退出，便于脚本等待
+  某个事件。
+- 属性变化会显示「旧值 → 新值」（旧值来自本次会话里见过的上一条）。
+- 断线自动重连，重连前会用最新的 access_token 换掉密码。
 
 ## 5. 调用动作
 

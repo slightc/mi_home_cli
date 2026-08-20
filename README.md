@@ -66,6 +66,9 @@ mi set <设备> <属性=值>...
 mi action <设备> [动作] [--in 值]...
 mi on|off|toggle <设备>
 
+# 实时盯着（云端 MQTT 长连接，不是轮询）
+mi watch [设备...] [--prop on] [--no-events] [--no-state] [--exit-after N] [--duration 秒]
+
 # 语义命令（不带选项时显示当前状态）
 mi light <设备> [--on|--off] [--brightness 60] [--ct 4000] [--color 红] [--mode 日光]
 mi climate <设备> [--on|--off] [--mode 制冷] [--temp 26] [--fan 2]
@@ -88,7 +91,18 @@ mi version
 Shell 补全用 typer 内置的：`mi --install-completion`（或 `mi --show-completion`
 自己贴进 rc 文件）。
 
-局域网控制和 `mi watch` 还没做，见 [docs/cli-spec.md](docs/cli-spec.md)。
+`mi watch` 走 MQTT 长连接（`{区域}-ha.mqtt.io.mi.com:8883`），属性一变就出一行；
+`-o json` 是逐行 JSON，可以直接管道给 `jq` 做触发器：
+
+```bash
+mi watch 门锁 -o json | while read -r line; do
+  echo "$line" | jq -r 'select(.property=="lock.operation-method")'
+done
+```
+
+网络出口封了 8883 时连不上（公司网、容器里常见），命令会明确报出来。
+
+局域网控制（M5）还没做，见 [docs/cli-spec.md](docs/cli-spec.md)。
 
 全局参数（`--profile` / `--region` / `--output` / `--timeout`）放在子命令之前，
 例如 `mi -o json auth status`；`-o` 也可以直接跟在子命令后面，或用环境变量
