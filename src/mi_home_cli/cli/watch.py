@@ -180,6 +180,7 @@ def watch(
             region=session.region,
             client_id=identity.device_id,
             token_provider=session.access_token,
+            debug=app_ctx.verbose,
             on_state_change=lambda ok: render.info(
                 "[dim]已连接[/dim]" if ok else "[yellow]连接断开，正在重连…[/yellow]"
             ),

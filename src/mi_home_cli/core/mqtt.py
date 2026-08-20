@@ -25,6 +25,20 @@ BROKER_PORT = 8883
 KEEPALIVE = 60
 
 
+def _ssl_context() -> ssl.SSLContext:
+    """TLS 上下文。
+
+    优先用 certifi 的根证书：paho 默认走系统 CA，而 macOS 上的 Python 经常
+    找不到根证书（同一台机器 httpx 能通、MQTT 连不上，多半就是这个原因）。
+    """
+    try:
+        import certifi
+
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+
 def broker_host(region: str) -> str:
     return f"{region}-{BROKER_SUFFIX}"
 
@@ -114,6 +128,7 @@ class CloudMqtt:
         client_id: str,
         token_provider: Callable[[], str],
         on_state_change: Callable[[bool], None] | None = None,
+        debug: bool = False,
     ) -> None:
         self.region = region
         self._token_provider = token_provider
@@ -129,7 +144,10 @@ class CloudMqtt:
             client_id=client_id,
             protocol=mqtt.MQTTv5,
         )
-        self._client.tls_set(tls_version=ssl.PROTOCOL_TLS_CLIENT)
+        self._client.tls_set_context(_ssl_context())
+        if debug:
+            # paho 自己的日志能把 TLS 握手和 CONNACK 的细节打出来
+            self._client.enable_logger()
         self._client.on_connect = self._handle_connect
         self._client.on_connect_fail = self._handle_connect_fail
         self._client.on_disconnect = self._handle_disconnect

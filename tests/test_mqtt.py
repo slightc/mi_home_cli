@@ -165,3 +165,27 @@ def test_connect_failure_does_not_mark_connected(fake: CloudMqtt):
     fake._handle_connect(fake._client, None, None, reason_code=Failure())
     assert not fake._connected.is_set()
     assert fake._client.subscribed == []
+
+
+def test_uses_certifi_ca_bundle():
+    """paho 默认走系统 CA，macOS 上的 Python 常常找不到根证书——同一台机器
+
+    httpx 能通、MQTT 连不上，多半就是这个。显式用 certifi 更稳。
+    """
+    import certifi
+
+    from mi_home_cli.core.mqtt import _ssl_context
+
+    context = _ssl_context()
+    assert context.get_ca_certs(), "TLS 上下文里一张根证书都没有"
+    assert certifi.where()  # 确认依赖装着
+
+
+def test_tls_context_is_verifying():
+    import ssl as _ssl
+
+    from mi_home_cli.core.mqtt import _ssl_context
+
+    context = _ssl_context()
+    assert context.verify_mode == _ssl.CERT_REQUIRED
+    assert context.check_hostname is True
