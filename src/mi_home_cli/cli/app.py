@@ -78,6 +78,13 @@ def main_callback(
     all_homes: Annotated[
         bool, typer.Option("--all-homes", help="忽略默认家庭，跨所有家庭操作")
     ] = False,
+    verify: Annotated[
+        bool,
+        typer.Option(
+            "--verify/--no-verify",
+            help="写入后回读确认（默认开；关掉可省一次请求）",
+        ),
+    ] = True,
 ) -> None:
     root: Path = config_dir()
     config = read_config(root)
@@ -91,6 +98,7 @@ def main_callback(
         root=root,
         dry_run=dry_run,
         all_homes=all_homes,
+        verify=verify,
     )
 
 

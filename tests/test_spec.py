@@ -189,3 +189,37 @@ def test_range_text(spec: DeviceSpec):
     assert spec.find_property("screen.brightness").range_text() == "1~100 step 1"
     assert spec.find_property("2.3").range_text() == "0=自动 3=睡眠"
     assert spec.find_property("2.1").range_text() == "-"
+
+
+def test_verify_after_write_reports_actual_values(monkeypatch, spec):
+    """写完回读：以设备的真实状态为准，而不是只信返回码。"""
+    from mi_home_cli.cli.prop import verify_after_write
+
+    prop = spec.find_property("screen.brightness")
+    calls = []
+
+    class FakeApi:
+        def get_props(self, params):
+            calls.append(params)
+            # 第一次还是旧值，第二次才跟上——模拟上报延迟
+            value = 30 if len(calls) == 1 else 60
+            return [{"siid": 6, "piid": 2, "value": value, "code": 0}]
+
+    monkeypatch.setattr("time.sleep", lambda _: None)
+    actual = verify_after_write(FakeApi(), "d1", [(prop, 60)], delay=0)
+    assert actual[(6, 2)] == 60
+    assert len(calls) == 2  # 第一次不一致，重试了一次
+
+
+def test_verify_skips_unreadable_properties(monkeypatch, spec):
+    from mi_home_cli.cli.prop import verify_after_write
+
+    write_only = spec.find_property("2.3")
+    write_only.access = ["write"]
+
+    class Boom:
+        def get_props(self, params):
+            raise AssertionError("不该为只写属性发读请求")
+
+    monkeypatch.setattr("time.sleep", lambda _: None)
+    assert verify_after_write(Boom(), "d1", [(write_only, 3)], delay=0) == {}

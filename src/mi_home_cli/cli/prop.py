@@ -1,6 +1,7 @@
 """`mi get` / `mi set` / `mi action` 以及 on/off/toggle。"""
 from __future__ import annotations
 
+import time
 from typing import Annotated, Any, Optional
 
 import typer
@@ -57,15 +58,61 @@ def read_current(
     }
 
 
+# 写入被接受的返回码。0 是明确成功；1 是「已接受、设备执行中」——部分设备
+# （如 dwdz.switch.sw0a01）对每次写入都回 1，实际操作是成功的，不能当失败。
+ACCEPTED_CODES = frozenset({0, 1})
+
+
 def _explain_code(code: int) -> str:
     """把常见的返回码翻成人话。"""
     return {
         0: "成功",
+        1: "已接受",
         -704010000: "设备不在线",
         -704042011: "设备不支持这个属性",
         -704220025: "属性不可写",
         -704053026: "设备拒绝（可能被童锁/物理开关限制）",
     }.get(code, f"失败（code={code}）")
+
+
+def verify_after_write(
+    api: CloudApi,
+    did: str,
+    expected: list[tuple[Property, Any]],
+    *,
+    attempts: int = 2,
+    delay: float = 0.6,
+) -> dict[tuple[int, int], Any]:
+    """写完再读一遍，用设备的真实状态说话。
+
+    返回码只是「接受」的回执，不代表已生效；而云端的值可能有延迟，所以读不
+    到预期值时会再试一次，仍不一致也只当作「可能有延迟」提示，不判失败。
+    """
+    readable = [(prop, value) for prop, value in expected if prop.readable]
+    if not readable:
+        return {}
+    params = [
+        {"did": did, "siid": prop.siid, "piid": prop.piid} for prop, _ in readable
+    ]
+    actual: dict[tuple[int, int], Any] = {}
+    for attempt in range(attempts):
+        time.sleep(delay)
+        try:
+            results = api.get_props(params)
+        except MiCliError:
+            return actual
+        actual = {
+            (item["siid"], item["piid"]): item.get("value")
+            for item in results
+            if item.get("code") == 0 and "siid" in item and "piid" in item
+        }
+        if all(
+            actual.get((prop.siid, prop.piid)) == value for prop, value in readable
+        ):
+            break
+        if attempt == attempts - 1:
+            break
+    return actual
 
 
 def get(
@@ -177,23 +224,42 @@ def set_(
         api = CloudApi(session)
         before = read_current(api, target.did, props)
         results = api.set_props(params)
+        actual = (
+            verify_after_write(
+                api, target.did, [(p, q["value"]) for p, q in zip(props, params)]
+            )
+            if app_ctx.verify
+            else {}
+        )
 
     by_key = {(item.get("siid"), item.get("piid")): item for item in results}
     rows = []
     failed = False
+    lagging = False
     for prop, param in zip(props, params):
-        code = int(by_key.get((prop.siid, prop.piid), {}).get("code", -1))
-        failed = failed or code != 0
-        old = before.get((prop.siid, prop.piid))
+        key = (prop.siid, prop.piid)
+        code = int(by_key.get(key, {}).get("code", -1))
+        ok = code in ACCEPTED_CODES
+        failed = failed or not ok
+        result = _explain_code(code)
+        if ok and key in actual:
+            if actual[key] == param["value"]:
+                result = "成功"
+            else:
+                result = f"已下发，回读仍是 {format_value(prop, actual[key])}"
+                lagging = True
+        old = before.get(key)
         rows.append(
             {
                 "属性": prop.full_name,
                 "旧值": format_value(prop, old) if old is not None else "-",
                 "新值": format_value(prop, param["value"]),
-                "结果": _explain_code(code),
+                "结果": result,
             }
         )
     render.output(rows, pick_output(app_ctx, output), title=target.label)
+    if lagging:
+        render.warn("云端读回的值还没跟上，可能是设备上报有延迟；隔几秒再 `mi get` 看看")
     if failed:
         raise typer.Exit(code=CloudError.exit_code)
 
@@ -303,10 +369,24 @@ def _switch(app_ctx: AppContext, device: str, value: bool | None) -> None:
                 }
             ]
         )
-    code = int(results[0].get("code", -1)) if results else -1
-    if code != 0:
-        render.error(f"{target.label} {'开' if value else '关'}失败：{_explain_code(code)}")
+        code = int(results[0].get("code", -1)) if results else -1
+        actual = (
+            verify_after_write(api, target.did, [(prop, value)])
+            if app_ctx.verify and code in ACCEPTED_CODES
+            else {}
+        )
+    if code not in ACCEPTED_CODES:
+        render.error(
+            f"{target.label} {'开' if value else '关'}失败：{_explain_code(code)}"
+        )
         raise typer.Exit(code=CloudError.exit_code)
+    readback = actual.get((prop.siid, prop.piid))
+    if readback is not None and readback != value:
+        render.warn(
+            f"{target.label} 指令已下发，但回读仍是"
+            f"{format_value(prop, readback)}，可能是上报延迟"
+        )
+        return
     render.success(f"{target.label} 已{'打开' if value else '关闭'}")
 
 

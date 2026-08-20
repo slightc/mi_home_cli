@@ -151,3 +151,17 @@ def test_action_sends_bare_value_list(profile: Profile):
         CloudApi(s).call_action("d1", 2, 1, [5, "x"])
     # 这个接口要的是值的数组，不是 {piid, value}
     assert seen == {"did": "d1", "siid": 2, "aiid": 1, "in": [5, "x"]}
+
+
+def test_set_result_code_1_is_accepted_not_failure():
+    """有些设备（如 dwdz.switch.sw0a01）对每次写入都回 code=1，操作其实成功了。
+
+    实测：读当前值 code=0，写回同一个值 code=1，设备状态正常；把非 0 一律
+    当失败会让所有写操作都报错。
+    """
+    from mi_home_cli.cli.prop import ACCEPTED_CODES, _explain_code
+
+    assert 0 in ACCEPTED_CODES and 1 in ACCEPTED_CODES
+    assert -704010000 not in ACCEPTED_CODES
+    assert _explain_code(1) == "已接受"
+    assert "失败" in _explain_code(-704220025) or "不可写" in _explain_code(-704220025)

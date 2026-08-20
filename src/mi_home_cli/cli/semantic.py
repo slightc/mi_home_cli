@@ -16,7 +16,13 @@ from ..core.semantic import STATUS_PROPERTIES, Planner, format_color, parse_colo
 from ..core.spec import DeviceSpec, format_value
 from ..errors import CloudError
 from .context import AppContext, OutputOption, pick_output
-from .prop import _explain_code, _target, read_current
+from .prop import (
+    ACCEPTED_CODES,
+    _explain_code,
+    _target,
+    read_current,
+    verify_after_write,
+)
 
 DeviceArg = Annotated[str, typer.Argument(help="设备名称、别名或 did")]
 
@@ -85,6 +91,15 @@ def _apply(
             api, device.did, [change.prop for change in planner.changes]
         )
         results = api.set_props(params)
+        actual = (
+            verify_after_write(
+                api,
+                device.did,
+                [(change.prop, change.value) for change in planner.changes],
+            )
+            if app_ctx.verify
+            else {}
+        )
     by_key = {(item.get("siid"), item.get("piid")): item for item in results}
     rows = []
     failed = False
@@ -99,14 +114,23 @@ def _apply(
         )
 
     for change in planner.changes:
-        code = int(by_key.get((change.prop.siid, change.prop.piid), {}).get("code", -1))
-        failed = failed or code != 0
+        key = (change.prop.siid, change.prop.piid)
+        code = int(by_key.get(key, {}).get("code", -1))
+        ok = code in ACCEPTED_CODES
+        failed = failed or not ok
+        result = _explain_code(code)
+        if ok and key in actual:
+            result = (
+                "成功"
+                if actual[key] == change.value
+                else f"已下发，回读仍是 {shown(change.prop, actual[key])}"
+            )
         rows.append(
             {
                 "属性": change.prop.full_name,
-                "旧值": shown(change.prop, before.get((change.prop.siid, change.prop.piid))),
+                "旧值": shown(change.prop, before.get(key)),
                 "新值": shown(change.prop, change.value),
-                "结果": _explain_code(code),
+                "结果": result,
             }
         )
     render.output(rows, pick_output(app_ctx, output), title=device.label)
