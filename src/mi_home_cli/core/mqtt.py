@@ -121,6 +121,9 @@ class CloudMqtt:
         self.messages: "queue.Queue[Message]" = queue.Queue()
         self._topics: list[str] = []
         self._connected = threading.Event()
+        # 连不上时把真正的原因记下来：TCP 不通、TLS 握手失败、认证被拒，
+        # 这三种问题排查方向完全不同，压成一句「超时」等于没说
+        self._failure: str | None = None
         self._client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             client_id=client_id,
@@ -128,13 +131,21 @@ class CloudMqtt:
         )
         self._client.tls_set(tls_version=ssl.PROTOCOL_TLS_CLIENT)
         self._client.on_connect = self._handle_connect
+        self._client.on_connect_fail = self._handle_connect_fail
         self._client.on_disconnect = self._handle_disconnect
         self._client.on_message = self._handle_message
 
     # ---------- 回调 ----------
 
+    def _handle_connect_fail(self, client, userdata=None):
+        """TCP/TLS 阶段就没成——通常是端口不通或证书校验失败。"""
+        self._failure = "连不上 broker（TCP 或 TLS 阶段失败）"
+
     def _handle_connect(self, client, userdata, flags, reason_code, properties=None):
         if getattr(reason_code, "is_failure", False):
+            # 走到这说明 TCP/TLS 通了，是 broker 拒绝了连接
+            self._failure = f"broker 拒绝连接：{reason_code}"
+            self._connected.clear()
             return
         # 断线重连后要把订阅重新报一遍
         for topic in self._topics:
@@ -180,12 +191,23 @@ class CloudMqtt:
                 f"连接 {broker_host(self.region)}:{BROKER_PORT} 失败：{err}"
             ) from err
         if not self._connected.wait(timeout):
+            failure = self._failure
             self.stop()
+            if failure:
+                raise NetworkError(
+                    f"连接 {broker_host(self.region)}:{BROKER_PORT} 失败：{failure}",
+                    hint=(
+                        "broker 拒绝连接多半是凭据问题，先跑 "
+                        "`mi auth status --check`；"
+                        "TCP/TLS 阶段失败则是网络封了 8883 端口"
+                    ),
+                )
             raise NetworkError(
-                f"连接 {broker_host(self.region)}:{BROKER_PORT} 超时",
+                f"连接 {broker_host(self.region)}:{BROKER_PORT} 超时"
+                f"（{timeout:.0f} 秒内没有任何回应）",
                 hint=(
-                    "常见原因：网络出口封了 8883 端口（公司网/容器里很常见），"
-                    "或 access_token 失效（先跑 `mi auth status --check`）"
+                    "多半是出口封了 8883 端口。用 `mi doctor` 看一眼，"
+                    "或 `nc -vz " + broker_host(self.region) + " 8883` 直接测"
                 ),
             )
 

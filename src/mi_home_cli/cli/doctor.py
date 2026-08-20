@@ -32,6 +32,18 @@ def _check_reachable(url: str, timeout: float) -> tuple[str, str]:
     return OK, f"HTTP {response.status_code}"
 
 
+def _check_tcp(host: str, port: int, timeout: float) -> tuple[str, str]:
+    """MQTT 走裸 TCP，被出口防火墙拦掉是常见情况，单独测一下。"""
+    started = time.time()
+    try:
+        with socket.create_connection((host, port), timeout=min(timeout, 5)):
+            return OK, f"可连接（{(time.time() - started) * 1000:.0f}ms）"
+    except socket.timeout:
+        return FAIL, "连接超时，出口多半封了这个端口（mi watch 会用不了）"
+    except OSError as err:
+        return FAIL, f"{type(err).__name__}: {err}"
+
+
 def _check_clock(timeout: float) -> tuple[str, str]:
     """时钟偏差过大会让 OAuth 和 token 有效期判断出问题。"""
     try:
@@ -121,7 +133,14 @@ def run(ctx: typer.Context, output=None) -> None:
     status, detail = _check_reachable(f"https://{const.api_host(region)}/", timeout)
     add(f"{const.api_host(region)}", status, detail)
 
-    # 5. 时钟
+    # 5. MQTT broker（mi watch 用）
+    from ..core.mqtt import BROKER_PORT, broker_host
+
+    host = broker_host(region)
+    status, detail = _check_tcp(host, BROKER_PORT, timeout)
+    add(f"{host}:{BROKER_PORT}", status, detail)
+
+    # 6. 时钟
     status, detail = _check_clock(timeout)
     add("系统时钟", status, detail)
 
