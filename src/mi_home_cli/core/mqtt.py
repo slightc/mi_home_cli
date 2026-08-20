@@ -29,29 +29,37 @@ KEEPALIVE = 60
 CA_BUNDLE_ENV = "MI_CA_BUNDLE"
 
 
-def _ssl_context() -> ssl.SSLContext:
-    """TLS 上下文。
+def _certifi_context() -> ssl.SSLContext | None:
+    try:
+        import certifi
+    except ImportError:
+        return None
+    return ssl.create_default_context(cafile=certifi.where())
 
-    顺序有讲究：
-    1. MI_CA_BUNDLE 指定的证书优先——用自签 CA 做中间人的环境（企业代理、
-       Clash/Surge 的 MITM）得靠它才能连上；
-    2. 否则用系统默认（也会认 SSL_CERT_FILE），这样系统钥匙串里装了的
-       企业根证书能直接生效；
-    3. 系统里一张根证书都没有时（macOS 上的 Python 常见）再退回 certifi。
-    强行只用 certifi 会把第 2 类用户挡在门外，所以 certifi 只做兜底。
+
+def ssl_contexts() -> list[ssl.SSLContext]:
+    """按顺序要尝试的 TLS 上下文。
+
+    `MI_CA_BUNDLE` 指定了就只用它——那是用户明确的意思（企业代理的自签 CA
+    多半就靠它）。否则先用系统默认（也认 SSL_CERT_FILE，这样系统钥匙串里的
+    企业根证书能生效），失败再退 certifi。
+
+    注意不能只看「系统库是不是空的」来决定要不要退 certifi：库里有证书不代表
+    有这条链需要的那个根，实测就遇到过系统库非空、却验不过小米 broker 的机器。
+    所以判据是「验不过」而不是「库是空的」。
     """
     override = os.environ.get(CA_BUNDLE_ENV)
     if override:
-        return ssl.create_default_context(cafile=override)
-    context = ssl.create_default_context()
-    if not context.get_ca_certs():
-        try:
-            import certifi
+        return [ssl.create_default_context(cafile=override)]
+    contexts = [ssl.create_default_context()]
+    fallback = _certifi_context()
+    if fallback is not None:
+        contexts.append(fallback)
+    return contexts
 
-            return ssl.create_default_context(cafile=certifi.where())
-        except ImportError:
-            pass
-    return context
+
+def _ssl_context() -> ssl.SSLContext:
+    return ssl_contexts()[0]
 
 
 def broker_host(region: str) -> str:
@@ -143,11 +151,13 @@ class CloudMqtt:
         client_id: str,
         token_provider: Callable[[], str],
         on_state_change: Callable[[bool], None] | None = None,
+        on_note: Callable[[str], None] | None = None,
         debug: bool = False,
     ) -> None:
         self.region = region
         self._token_provider = token_provider
         self._on_state_change = on_state_change
+        self._on_note = on_note
         self.messages: "queue.Queue[Message]" = queue.Queue()
         self._topics: list[str] = []
         self._connected = threading.Event()
@@ -159,7 +169,8 @@ class CloudMqtt:
             client_id=client_id,
             protocol=mqtt.MQTTv5,
         )
-        self._client.tls_set_context(_ssl_context())
+        self._contexts = ssl_contexts()
+        self._client.tls_set_context(self._contexts[0])
         if debug:
             # paho 自己的日志能把 TLS 握手和 CONNACK 的细节打出来
             self._client.enable_logger()
@@ -217,23 +228,32 @@ class CloudMqtt:
     def start(self, timeout: float = 15.0) -> None:
         self._client.username_pw_set(const.CLIENT_ID, self._token_provider())
         host = broker_host(self.region)
-        try:
-            # 用同步 connect：异步版把握手异常闷在后台线程里，只剩一句超时，
-            # 而证书校验失败这类问题必须把原文给用户看
-            self._client.connect(host, BROKER_PORT, KEEPALIVE)
-        except ssl.SSLCertVerificationError as err:
+        # 用同步 connect：异步版把握手异常闷在后台线程里，只剩一句超时，
+        # 而证书校验失败这类问题必须把原文给用户看
+        last_error: ssl.SSLCertVerificationError | None = None
+        for index, context in enumerate(self._contexts):
+            self._client.tls_set_context(context)
+            try:
+                self._client.connect(host, BROKER_PORT, KEEPALIVE)
+                if index and self._on_note:
+                    self._on_note("系统根证书验不过，已改用 certifi 的证书库")
+                break
+            except ssl.SSLCertVerificationError as err:
+                last_error = err
+                continue
+            except (OSError, ssl.SSLError) as err:
+                raise NetworkError(
+                    f"连接 {host}:{BROKER_PORT} 失败：{type(err).__name__}: {err}"
+                ) from err
+        else:
             raise NetworkError(
-                f"{host}:{BROKER_PORT} 的证书校验失败：{err}",
+                f"{host}:{BROKER_PORT} 的证书校验失败：{last_error}",
                 hint=(
-                    "多半是代理在做中间人（Clash/Surge 的 fake-IP 会把域名解析到 "
-                    "198.18.x.x）。给这个域名加一条直连规则，或用 "
-                    f"{CA_BUNDLE_ENV} 指定代理的根证书"
+                    "系统根证书和 certifi 都验不过。若在用 Clash/Surge 这类代理，"
+                    "给 mqtt.io.mi.com 加条直连规则；确实需要中间人证书时用 "
+                    f"{CA_BUNDLE_ENV}=/path/to/ca.pem 指定"
                 ),
-            ) from err
-        except (OSError, ssl.SSLError) as err:
-            raise NetworkError(
-                f"连接 {host}:{BROKER_PORT} 失败：{type(err).__name__}: {err}"
-            ) from err
+            )
         self._client.loop_start()
         if not self._connected.wait(timeout):
             failure = self._failure

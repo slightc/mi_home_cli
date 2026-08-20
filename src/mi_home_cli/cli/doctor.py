@@ -49,23 +49,41 @@ def _check_broker(host: str, port: int, timeout: float) -> tuple[str, str]:
     try:
         with socket.create_connection((host, port), timeout=min(timeout, 5)) as raw:
             elapsed = (time.time() - started) * 1000
-            context = ssl.create_default_context()
-            try:
-                with context.wrap_socket(raw, server_hostname=host):
-                    pass
-            except ssl.SSLCertVerificationError as err:
-                detail = f"TCP 通（{elapsed:.0f}ms）但证书校验失败：{err.verify_message or err}"
+            from ..core.mqtt import ssl_contexts
+
+            note = ""
+            for index, context in enumerate(ssl_contexts()):
+                try:
+                    with context.wrap_socket(raw, server_hostname=host):
+                        pass
+                    note = "（用 certifi 的证书库）" if index else ""
+                    break
+                except ssl.SSLCertVerificationError as err:
+                    verify_error = err
+                    # 换一个证书库要重开连接，wrap 失败后这个 socket 不能再用
+                    raw.close()
+                    try:
+                        raw = socket.create_connection(
+                            (host, port), timeout=min(timeout, 5)
+                        )
+                    except OSError:
+                        break
+                except ssl.SSLError as err:
+                    return FAIL, f"TLS 握手失败：{err}"
+            else:
+                detail = (
+                    f"TCP 通（{elapsed:.0f}ms）但证书校验失败："
+                    f"{verify_error.verify_message or verify_error}"
+                )
                 if fake:
                     detail += f"；域名解析到 {fake[0]}，是代理的 fake-IP，给它加条直连规则"
                 return FAIL, detail
-            except ssl.SSLError as err:
-                return FAIL, f"TLS 握手失败：{err}"
     except socket.timeout:
         return FAIL, "连接超时，出口多半封了这个端口（mi watch 会用不了）"
     except OSError as err:
         return FAIL, f"{type(err).__name__}: {err}"
 
-    detail = f"TCP + TLS 均可（{elapsed:.0f}ms）"
+    detail = f"TCP + TLS 均可（{elapsed:.0f}ms）{note}"
     if fake:
         detail += f"；注意解析到 {fake[0]}，流量经过代理"
     return OK, detail

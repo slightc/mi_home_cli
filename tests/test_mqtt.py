@@ -209,24 +209,34 @@ def test_ca_bundle_env_overrides(monkeypatch, tmp_path):
     assert _ssl_context().get_ca_certs()
 
 
-def test_system_store_wins_over_certifi(monkeypatch):
-    """系统里装了企业根证书时要用系统的，certifi 只做兜底——
+def test_system_store_is_tried_first_then_certifi(monkeypatch):
+    """先系统后 certifi。
 
-    强行只用 certifi 会把配了企业 CA 的用户挡在门外。
+    不能只看「系统库是不是空的」来决定要不要退 certifi：库里有证书不代表有
+    这条链需要的根，实测就有机器系统库非空却验不过小米 broker。所以两个都
+    排进候选，按顺序试。
     """
-    import ssl as _ssl
+    import certifi
 
     from mi_home_cli.core import mqtt as module
 
-    calls = []
-    real = _ssl.create_default_context
-
-    def spy(*args, **kwargs):
-        calls.append(kwargs.get("cafile"))
-        return real(*args, **kwargs)
-
     monkeypatch.delenv(module.CA_BUNDLE_ENV, raising=False)
-    monkeypatch.setattr(module.ssl, "create_default_context", spy)
-    module._ssl_context()
-    # 系统store 有证书时不该再去加载 certifi
-    assert calls == [None]
+    contexts = module.ssl_contexts()
+    assert len(contexts) == 2
+    # 第二个才是 certifi 的
+    assert certifi.where()
+
+
+def test_explicit_bundle_is_the_only_candidate(monkeypatch, tmp_path):
+    """用户显式指定了就只用它，别再偷偷回退——那会让「我指定的证书没生效」
+
+    这种问题变得无从排查。
+    """
+    import certifi
+
+    from mi_home_cli.core import mqtt as module
+
+    bundle = tmp_path / "ca.pem"
+    bundle.write_text(open(certifi.where(), encoding="utf-8").read(), encoding="utf-8")
+    monkeypatch.setenv(module.CA_BUNDLE_ENV, str(bundle))
+    assert len(module.ssl_contexts()) == 1
