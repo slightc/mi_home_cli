@@ -83,6 +83,12 @@ class FakeClient:
     def tls_set(self, **kwargs):
         self.tls = kwargs
 
+    def tls_set_context(self, context):
+        self.tls_context = context
+
+    def enable_logger(self, logger=None):
+        self.logger_enabled = True
+
     def username_pw_set(self, username, password):
         self.credentials.append((username, password))
 
