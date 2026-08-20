@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mi-home-cli"
+version = "0.1.0"
+description = "命令行控制米家（Xiaomi Home）设备"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+dependencies = [
+    "httpx>=0.27",
+    "typer>=0.12",
+    "rich>=13.0",
+    "paho-mqtt>=2.1.0",
+    "cryptography>=50.0.0",
+]
+
+[project.optional-dependencies]
+# 可选的运行时增强：登录时自动广播 mDNS，提高回调命中率。
+mdns = ["zeroconf>=0.130"]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+mi = "mi_home_cli.cli.app:main"
+mihome = "mi_home_cli.cli.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mi_home_cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
