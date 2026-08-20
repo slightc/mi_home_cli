@@ -14,7 +14,14 @@ from ..core.registry import Device
 from ..core.semantic import STATUS_PROPERTIES, Planner, format_color, parse_color
 from ..core.spec import DeviceSpec, format_value
 from ..errors import CloudError
-from .context import AppContext, OutputOption, pick_output
+from .context import (
+    AppContext,
+    DryRunOption,
+    OutputOption,
+    VerifyOption,
+    apply_write_flags,
+    pick_output,
+)
 from .prop import (
     ACCEPTED_CODES,
     _channel,
@@ -161,10 +168,12 @@ def light(
     mode: Annotated[
         Optional[str], typer.Option("--mode", help="模式，如 日光 / 月光")
     ] = None,
+    dry_run: DryRunOption = None,
+    verify: VerifyOption = None,
     output: OutputOption = None,
 ) -> None:
     """控制灯。不带选项时显示当前状态。"""
-    app_ctx = _ctx(ctx)
+    app_ctx = apply_write_flags(_ctx(ctx), dry_run, verify)
     target, spec = _target(app_ctx, device)
     if on is None and not any((brightness, ct, color, mode)):
         _show_status(app_ctx, target, spec, "light", output)
@@ -198,10 +207,12 @@ def climate(
     fan: Annotated[
         Optional[str], typer.Option("--fan", help="风速挡位")
     ] = None,
+    dry_run: DryRunOption = None,
+    verify: VerifyOption = None,
     output: OutputOption = None,
 ) -> None:
     """控制空调、暖风机等温控设备。不带选项时显示当前状态。"""
-    app_ctx = _ctx(ctx)
+    app_ctx = apply_write_flags(_ctx(ctx), dry_run, verify)
     target, spec = _target(app_ctx, device)
     if on is None and not any((mode, temp, fan)):
         _show_status(app_ctx, target, spec, "climate", output)
@@ -227,10 +238,12 @@ def cover(
     position: Annotated[
         Optional[str], typer.Option("--position", "-p", help="开合百分比 0~100")
     ] = None,
+    dry_run: DryRunOption = None,
+    verify: VerifyOption = None,
     output: OutputOption = None,
 ) -> None:
     """控制窗帘等开合类设备。不带选项时显示当前状态。"""
-    app_ctx = _ctx(ctx)
+    app_ctx = apply_write_flags(_ctx(ctx), dry_run, verify)
     target, spec = _target(app_ctx, device)
     if not any((open_, close, stop, position)):
         _show_status(app_ctx, target, spec, "cover", output)
@@ -263,10 +276,12 @@ def fan(
     swing: Annotated[
         Optional[bool], typer.Option("--swing/--no-swing", help="摇头")
     ] = None,
+    dry_run: DryRunOption = None,
+    verify: VerifyOption = None,
     output: OutputOption = None,
 ) -> None:
     """控制风扇、净化器等带挡位的设备。不带选项时显示当前状态。"""
-    app_ctx = _ctx(ctx)
+    app_ctx = apply_write_flags(_ctx(ctx), dry_run, verify)
     target, spec = _target(app_ctx, device)
     if on is None and swing is None and not any((speed, mode)):
         _show_status(app_ctx, target, spec, "fan", output)

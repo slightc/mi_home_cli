@@ -10,7 +10,7 @@ from .. import render
 from ..core.channel import DeviceChannel, open_device_channel
 from ..core.registry import Device
 from ..core.session import Session
-from ..core.spec import DeviceSpec, Property, format_value, parse_value
+from ..core.spec import Action, DeviceSpec, Property, format_value, parse_value
 from ..errors import (
     CloudError,
     InvalidValue,
@@ -19,7 +19,14 @@ from ..errors import (
     UsageError,
 )
 from ..render import OutputFormat
-from .context import AppContext, OutputOption, pick_output
+from .context import (
+    AppContext,
+    DryRunOption,
+    OutputOption,
+    VerifyOption,
+    apply_write_flags,
+    pick_output,
+)
 from .device import resolve
 from .spec_cmd import describe_action_inputs, load_spec
 
@@ -75,6 +82,34 @@ def read_current(
 # 写入被接受的返回码。0 是明确成功；1 是「已接受、设备执行中」——部分设备
 # （如 dwdz.switch.sw0a01）对每次写入都回 1，实际操作是成功的，不能当失败。
 ACCEPTED_CODES = frozenset({0, 1})
+
+
+def describe_action_output(
+    spec: DeviceSpec, action: Action, out: Any
+) -> dict[str, Any] | Any:
+    """把动作的返回值配上属性名。
+
+    out 里只有值（或 {piid, value}），光打印一个数组没法看——比如摄像机的
+    start-rtsp-stream 返回的是 [地址, 快照地址, 过期时间]，配上名字才有意义。
+    """
+    if not out:
+        return "-"
+    if not isinstance(out, list):
+        return out
+
+    named: dict[str, Any] = {}
+    if all(isinstance(item, dict) and "piid" in item for item in out):
+        pairs = [(item["piid"], item.get("value")) for item in out]
+    elif len(out) == len(action.out_piids):
+        pairs = list(zip(action.out_piids, out))
+    else:
+        # 对不上就原样给出去，别猜
+        return out
+    for piid, value in pairs:
+        prop = spec.property_at(action.siid, piid)
+        key = prop.name if prop else str(piid)
+        named[key] = format_value(prop, value) if prop else value
+    return named
 
 
 def _explain_code(code: int) -> str:
@@ -195,10 +230,12 @@ def set_(
     assignments: Annotated[
         list[str], typer.Argument(help="属性=值，可以写多个，如 on=true brightness=60")
     ],
+    dry_run: DryRunOption = None,
+    verify: VerifyOption = None,
     output: OutputOption = None,
 ) -> None:
     """写属性。"""
-    app_ctx = _ctx(ctx)
+    app_ctx = apply_write_flags(_ctx(ctx), dry_run, verify)
     target, spec = _target(app_ctx, device)
 
     params: list[dict[str, Any]] = []
@@ -287,10 +324,11 @@ def action(
     values: Annotated[
         Optional[list[str]], typer.Option("--in", help="按顺序传入参，可重复")
     ] = None,
+    dry_run: DryRunOption = None,
     output: OutputOption = None,
 ) -> None:
     """调用动作。不指定动作名就列出这台设备支持的动作。"""
-    app_ctx = _ctx(ctx)
+    app_ctx = apply_write_flags(_ctx(ctx), dry_run)
     target, spec = _target(app_ctx, device)
     fmt = pick_output(app_ctx, output)
 
@@ -336,15 +374,17 @@ def action(
             target.did, target_action.siid, target_action.aiid, parsed
         )
     code = int(result.get("code", -1))
-    render.output(
-        {
-            "设备": target.label,
-            "动作": target_action.full_name,
-            "结果": _explain_code(code),
-            "返回": result.get("out") or "-",
-        },
-        fmt,
-    )
+    data: dict[str, Any] = {
+        "设备": target.label,
+        "动作": target_action.full_name,
+        "结果": _explain_code(code),
+    }
+    named = describe_action_output(spec, target_action, result.get("out"))
+    if isinstance(named, dict):
+        data.update({f"↳ {key}": value for key, value in named.items()})
+    else:
+        data["返回"] = named
+    render.output(data, fmt)
     if code != 0:
         raise typer.Exit(code=CloudError.exit_code)
 
@@ -364,6 +404,14 @@ def _switch(app_ctx: AppContext, device: str, value: bool | None) -> None:
         )
     # 多个服务都有 on 时（比如带夜灯的灯），取 siid 最小的主服务
     prop = min(candidates, key=lambda p: (p.siid, p.piid))
+    if app_ctx.dry_run:
+        # toggle 的目标值取决于当前状态，dry-run 不读设备就说不准，如实标注
+        target_value = "取反当前状态" if value is None else format_value(prop, value)
+        render.info(
+            f"[dim]--dry-run：{target.label}（{target.location}）"
+            f" → {prop.full_name}（{prop.ref}）= {target_value}[/dim]"
+        )
+        return
     with app_ctx.session() as session:
         api = _channel(app_ctx, session, target)
         if value is None:
@@ -407,22 +455,28 @@ def _switch(app_ctx: AppContext, device: str, value: bool | None) -> None:
 def on(
     ctx: typer.Context,
     device: Annotated[str, typer.Argument(help="设备名称、别名或 did")],
+    dry_run: DryRunOption = None,
+    verify: VerifyOption = None,
 ) -> None:
     """打开设备。"""
-    _switch(_ctx(ctx), device, True)
+    _switch(apply_write_flags(_ctx(ctx), dry_run, verify), device, True)
 
 
 def off(
     ctx: typer.Context,
     device: Annotated[str, typer.Argument(help="设备名称、别名或 did")],
+    dry_run: DryRunOption = None,
+    verify: VerifyOption = None,
 ) -> None:
     """关闭设备。"""
-    _switch(_ctx(ctx), device, False)
+    _switch(apply_write_flags(_ctx(ctx), dry_run, verify), device, False)
 
 
 def toggle(
     ctx: typer.Context,
     device: Annotated[str, typer.Argument(help="设备名称、别名或 did")],
+    dry_run: DryRunOption = None,
+    verify: VerifyOption = None,
 ) -> None:
     """切换开关。"""
-    _switch(_ctx(ctx), device, None)
+    _switch(apply_write_flags(_ctx(ctx), dry_run, verify), device, None)

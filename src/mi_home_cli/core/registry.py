@@ -78,6 +78,32 @@ class Device:
             data["子设备"] = ", ".join(self.sub_devices)
         return data
 
+    def to_json(self) -> dict[str, Any]:
+        """给脚本和 agent 用的结构。
+
+        表格里的中文表头是给人看的，拿来当 JSON 的键很难用——字段名保持英文
+        且稳定，值也用原始类型（布尔就是布尔，不是「是」「否」）。
+        """
+        data: dict[str, Any] = {
+            "did": self.did,
+            "name": self.name,
+            "alias": self.alias,
+            "model": self.model,
+            "urn": self.urn,
+            "manufacturer": self.manufacturer,
+            "home": self.home_name or None,
+            "home_id": self.home_id or None,
+            "room": self.room_name or None,
+            "room_id": self.room_id or None,
+            "online": self.online,
+            "local_ip": self.local_ip,
+            "fw_version": self.fw_version,
+            "connect_type": self.connect_type,
+        }
+        if self.sub_devices:
+            data["sub_devices"] = sorted(self.sub_devices)
+        return data
+
     @staticmethod
     def load(data: dict[str, Any], alias: str | None = None) -> "Device":
         return Device(

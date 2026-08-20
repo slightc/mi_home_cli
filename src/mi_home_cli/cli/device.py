@@ -95,6 +95,23 @@ def home_list(ctx: typer.Context, output: OutputOption = None) -> None:
     for device in registry.devices:
         counts[device.home_id] = counts.get(device.home_id, 0) + 1
     default = app_ctx.default_home()
+    fmt = pick_output(app_ctx, output)
+    if fmt.value in ("json", "yaml"):
+        render.output(
+            [
+                {
+                    "home_id": home["home_id"],
+                    "name": home["home_name"],
+                    "rooms": len(home.get("rooms") or []),
+                    "devices": counts.get(home["home_id"], 0),
+                    "shared": bool(home.get("shared")),
+                    "default": bool(default and default["id"] == home["home_id"]),
+                }
+                for home in registry.homes
+            ],
+            fmt,
+        )
+        return
     rows = [
         {
             "家庭": home["home_name"]
@@ -106,7 +123,7 @@ def home_list(ctx: typer.Context, output: OutputOption = None) -> None:
         }
         for home in registry.homes
     ]
-    render.output(rows, pick_output(app_ctx, output))
+    render.output(rows, fmt)
 
 
 @room_app.command("list")
@@ -123,6 +140,7 @@ def room_list(
         key = (device.home_id, device.room_id)
         counts[key] = counts.get(key, 0) + 1
     default = None if home else app_ctx.default_home()
+    fmt = pick_output(app_ctx, output)
     rows = []
     for item in registry.homes:
         if home and home.lower() not in item["home_name"].lower():
@@ -130,15 +148,24 @@ def room_list(
         if default and default["id"] != item["home_id"]:
             continue
         for room in item.get("rooms") or []:
+            count = counts.get((item["home_id"], room["room_id"]), 0)
             rows.append(
                 {
+                    "home_id": item["home_id"],
+                    "home": item["home_name"],
+                    "room_id": room["room_id"],
+                    "room": room["room_name"],
+                    "devices": count,
+                }
+                if fmt.value in ("json", "yaml")
+                else {
                     "家庭": item["home_name"],
                     "房间": room["room_name"],
-                    "设备数": counts.get((item["home_id"], room["room_id"]), 0),
+                    "设备数": count,
                     "room_id": room["room_id"],
                 }
             )
-    render.output(rows, pick_output(app_ctx, output))
+    render.output(rows, fmt)
 
 
 @app.command("list")
@@ -173,11 +200,7 @@ def device_list(
     if fmt.value in ("json", "yaml"):
         render.output(
             [
-                {
-                    **device.detail(),
-                    "did": device.did,
-                    "token": mask(device.token),
-                }
+                {**device.to_json(), "token": mask(device.token)}
                 for device in devices
             ],
             fmt,
@@ -199,7 +222,11 @@ def device_show(
     """看一台设备的详情。"""
     app_ctx = _ctx(ctx)
     target = resolve(app_ctx, device)
-    render.output(target.detail(), pick_output(app_ctx, output))
+    fmt = pick_output(app_ctx, output)
+    if fmt.value in ("json", "yaml"):
+        render.output({**target.to_json(), "token": mask(target.token)}, fmt)
+        return
+    render.output(target.detail(), fmt)
 
 
 @app.command("sync")

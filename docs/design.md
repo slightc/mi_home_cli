@@ -289,6 +289,38 @@ CLI 的体验成败不在协议，在于**别让人记 did 和 siid/piid**。
 | **M5 本地** | ✅ 局域网通道（自行实现 miIO）、`lan list/discover/status`、`--channel auto\|cloud\|lan` 回落 | 低延迟、断网可用 |
 | 可选 | `repl` 交互模式、场景（`/app/v2/scene/*` 需自行探索验证，上游未使用）、中枢网关控制 | — |
 
+## 6.5 明确的非目标：只用 OAuth2
+
+米家生态里存在两套并行的身份：
+
+| | OAuth2（本项目 / 官方 HA 集成） | 账号密码（米家 App、al-one/hass-xiaomi-miot） |
+| --- | --- | --- |
+| 拿到什么 | `access_token` | `serviceToken` + `ssecurity`，请求要 RC4 签名 |
+| 能用的接口 | `/app/v2/*` 这套 spec 接口 | 上面全部，**外加** smartcamera、场景等私有接口 |
+| 代价 | 授权页登录，全程不碰用户密码 | 要处理密码、二次验证、签名算法 |
+
+**本项目只用 OAuth2。** 代价是下面这些做不了，属于已知且接受的缺口：
+
+- **摄像机报警录像回放**：`business.smartcamera.api.io.mi.com` 的 `get/eventlist`
+  与 `common/app/m3u8` 需要 `serviceToken` + `ssecurity` + RC4 签名。
+- **米家场景 / 自动化**：同样在那套身份之下。
+
+理由：不碰用户密码是这个 CLI 的安全底线之一——OAuth2 的授权在浏览器里完成，
+CLI 只拿到一个 3 天有效期、可撤销的 token；换成账号密码就要在本地处理密码和
+二次验证，风险和维护成本都不是这点功能换得来的。
+
+需要那些能力的人，用 [al-one/hass-xiaomi-miot](https://github.com/al-one/hass-xiaomi-miot)
+（Apache-2.0）更合适。
+
+顺带澄清一个容易混淆的点：**摄像机的实时推流地址不在这条分界线上**。部分型号的
+spec 里带 `camera-stream-for-google-home` / `camera-stream-for-amazon-alexa` 服务，
+`start-hls-stream` / `start-rtsp-stream` 是普通的 spec 动作，OAuth2 就能调，
+`mi action <设备> start-rtsp-stream` 直接可用，返回的地址会带上属性名。
+没有这两个服务的型号（如 `chuangmi.camera.039c01`、`chuangmi.camera.079ac1`）
+则只有 `p2p-stream`，那是小米私有的 cs2 协议，不在 miot-spec 的数据面里。
+支不支持是按 SKU 定的，同一款产品的不同 SKU 可能一个有一个没有——完整名单和
+扫描脚本见 [camera-stream.md](camera-stream.md)。
+
 ## 7. 测试策略
 
 - 协议层用录制的响应做 fixture 回放测试（**fixture 必须脱敏**：did、uid、token、ssid/bssid、经纬度）。

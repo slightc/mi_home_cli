@@ -256,8 +256,19 @@ mi version
 
 ```bash
 mi -o plain get 台灯 brightness        # 只输出 "60"，可以直接 $(...)
-mi -o json device list | jq '.[] | select(.在线=="是")'
+mi -o json device list | jq '.[] | select(.online)'
 ```
+
+JSON / YAML 输出用英文字段名和原始类型（`"online": true` 而不是「在线: 是」），
+表格里的中文表头只出现在给人看的那一档。
+
+## 给 AI agent 用
+
+仓库里带了一个 [Claude Code skill](.claude/skills/mi-home/SKILL.md)：在本仓库里跑
+Claude Code 会自动加载，它会教 agent 怎么定位设备、查 spec、按退出码分支处理，
+以及控制真实设备时该怎么谨慎（歧义要问、写操作有物理效果、别轮询）。
+
+想全局启用：`cp -r .claude/skills/mi-home ~/.claude/skills/`
 
 退出码：
 
@@ -362,8 +373,16 @@ uv run pytest
 | 语义命令、别名、默认家庭 | ✅ |
 | 云端 MQTT 实时推送 | ✅ |
 | 局域网直连（miIO） | ✅ |
-| 米家场景 / 自动化 | ❌ 上游未使用相关接口，需自行调研 |
+| 米家场景 / 自动化 | ❌ 需要账号密码那套身份，本项目只用 OAuth2 |
+| 摄像机报警录像回放 | ❌ 同上 |
+| 摄像机实时推流地址 | ⚠️ 部分型号可以，见 [docs/camera-stream.md](docs/camera-stream.md) |
 | 中枢网关本地控制 | ❌ 需要证书，仅 cn 区，复杂度高 |
+
+**只用 OAuth2** 是一条明确的边界：授权在浏览器里完成，CLI 只拿到一个有期限、可撤销的
+token，全程不碰账号密码。代价是上面标 ❌ 的那些接口用不了——它们需要
+`serviceToken` + `ssecurity` 那套身份。需要的话
+[al-one/hass-xiaomi-miot](https://github.com/al-one/hass-xiaomi-miot)（Apache-2.0）
+覆盖得更全。
 
 设计与协议细节见 [docs/design.md](docs/design.md)，完整命令参考见
 [docs/cli-spec.md](docs/cli-spec.md)。
