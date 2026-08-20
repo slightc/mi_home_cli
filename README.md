@@ -43,6 +43,12 @@ uv run mi auth status
 mi auth login|status|refresh|whoami|logout|exchange
 mi profile list|use|remove|path
 
+# 默认家庭（多个家庭时强烈建议设一个）
+mi home use 我家              # 之后所有命令只看这个家庭
+mi home use                   # 看当前默认
+mi home use --clear           # 取消
+mi config list|get|set|unset  # profile / region / output / home
+
 # 看有什么
 mi home list
 mi room list [--home 我家]
@@ -69,6 +75,9 @@ mi fan <设备> [--on|--off] [--speed 2] [--mode 自动] [--swing]
 mi doctor
 mi version
 ```
+
+设了默认家庭之后，设备解析、`device list`、`room list` 都只看这个家庭，
+跨家庭要加 `--all-homes`。设备在别的家庭时，报错会直接告诉你它在哪儿。
 
 设备可以用名称、别名、`房间/名称`、did 或型号来指；属性可以写 `on`、
 `light.brightness` 或 `2.1`，枚举值可以直接写中文描述（`mode=睡眠`）。

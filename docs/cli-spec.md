@@ -16,6 +16,7 @@
 | `--dry-run` | 只解析与校验，不发出真实请求 |
 | `-v, --verbose` / `-q, --quiet` | 打印完整请求响应 / 只输出结果 |
 | `--yes` | 跳过危险操作确认 |
+| `--all-homes` | 忽略默认家庭，跨所有家庭操作 |
 | `--show-secrets` | 输出中不打码 device token 等敏感字段 |
 
 ---
@@ -50,7 +51,8 @@ mi profile list|use|remove|path
 ## 2. 家庭 / 房间 / 设备
 
 ```bash
-mi home list                                   # 家庭列表（含共享家庭）
+mi home list                                   # 家庭列表（含共享家庭），默认家庭标 *
+mi home use [<家庭>] [--clear]                 # 设置/查看/取消默认家庭
 mi room list [--home <家>]                     # 房间列表
 
 mi device list [--home H] [--room R] [--model M] [--online|--offline]
@@ -152,7 +154,7 @@ mi raw api <METHOD> <path> [--data JSON]        # 直接打云端 API
 ## 9. 其他
 
 ```bash
-mi config get|set|list|path      # region / output / channel / timeout / cache TTL
+mi config list|get|set|unset|path   # profile / region / output / home
 mi doctor                        # 检查登录态、时钟偏差、网络连通、端口占用、文件权限
 mi --install-completion     # typer 内置，装当前 shell 的补全
 mi repl                          # 交互模式：选中设备后直接 get/set，带 Tab 补全（可选）

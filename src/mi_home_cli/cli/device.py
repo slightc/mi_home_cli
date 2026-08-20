@@ -9,8 +9,9 @@ import typer
 from .. import render
 from ..core.cloud import CloudApi
 from ..core.registry import Device, Registry
-from ..errors import UsageError
+from ..errors import DeviceNotFound, UsageError
 from ..render import mask
+from ..store import read_config, write_config
 from .context import AppContext, OutputOption, pick_output
 
 app = typer.Typer(help="设备清单", no_args_is_help=True)
@@ -60,7 +61,29 @@ def load_registry(app_ctx: AppContext, *, refresh: bool = False) -> Registry:
 
 
 def resolve(app_ctx: AppContext, ref: str, **filters: object) -> Device:
-    return load_registry(app_ctx).resolve(ref, **filters)
+    """解析设备，默认只在默认家庭里找。
+
+    在别的家庭里找到时不静默跨家庭操作——那正是设默认家庭要避免的事——
+    而是明确告诉用户它在哪儿、怎么绕过。
+    """
+    registry = load_registry(app_ctx)
+    scope = {**app_ctx.home_filter(), **filters}
+    try:
+        return registry.resolve(ref, **scope)
+    except DeviceNotFound:
+        home = app_ctx.default_home()
+        if not home or "home_id" in filters:
+            raise
+        elsewhere = registry.filter(search=ref)
+        if not elsewhere:
+            raise
+        names = "、".join(
+            f"{d.home_name}/{d.room_name or '-'} 的 {d.label}" for d in elsewhere[:5]
+        )
+        raise DeviceNotFound(
+            f"默认家庭「{home['name']}」里没有 `{ref}`，但在 {names} 找到了",
+            hint="加 --all-homes 跨家庭操作，或用 `mi home use` 换默认家庭",
+        ) from None
 
 
 @home_app.command("list")
@@ -71,9 +94,11 @@ def home_list(ctx: typer.Context, output: OutputOption = None) -> None:
     counts: dict[str, int] = {}
     for device in registry.devices:
         counts[device.home_id] = counts.get(device.home_id, 0) + 1
+    default = app_ctx.default_home()
     rows = [
         {
-            "家庭": home["home_name"],
+            "家庭": home["home_name"]
+            + (" *" if default and default["id"] == home["home_id"] else ""),
             "房间数": len(home.get("rooms") or []),
             "设备数": counts.get(home["home_id"], 0),
             "共享": "是" if home.get("shared") else "否",
@@ -97,9 +122,12 @@ def room_list(
     for device in registry.devices:
         key = (device.home_id, device.room_id)
         counts[key] = counts.get(key, 0) + 1
+    default = None if home else app_ctx.default_home()
     rows = []
     for item in registry.homes:
         if home and home.lower() not in item["home_name"].lower():
+            continue
+        if default and default["id"] != item["home_id"]:
             continue
         for room in item.get("rooms") or []:
             rows.append(
@@ -137,8 +165,9 @@ def device_list(
     """列出设备。"""
     app_ctx = _ctx(ctx)
     registry = load_registry(app_ctx, refresh=refresh)
+    scope = {} if home else app_ctx.home_filter()
     devices = registry.filter(
-        home=home, room=room, model=model, online=online, search=search
+        home=home, room=room, model=model, online=online, search=search, **scope
     )
     fmt = pick_output(app_ctx, output)
     if fmt.value in ("json", "yaml"):
@@ -156,7 +185,9 @@ def device_list(
         return
     render.output([device.summary(wide=wide) for device in devices], fmt)
     if fmt.value == "table":
-        render.info(f"[dim]共 {len(devices)} 台[/dim]")
+        current = None if home else app_ctx.default_home()
+        note = f"，只看「{current['name']}」，加 --all-homes 看全部" if current else ""
+        render.info(f"[dim]共 {len(devices)} 台{note}[/dim]")
 
 
 @app.command("show")
@@ -240,3 +271,37 @@ def alias_rm(ctx: typer.Context, alias: str) -> None:
     aliases.pop(alias)
     app_ctx.profile.write_aliases(aliases)
     render.success(f"已删除别名 `{alias}`")
+
+
+@home_app.command("use")
+def home_use(
+    ctx: typer.Context,
+    name: Annotated[
+        Optional[str], typer.Argument(help="家庭名称或 home_id，不给则显示当前默认")
+    ] = None,
+    clear: Annotated[
+        bool, typer.Option("--clear", help="取消默认家庭，回到全部家庭")
+    ] = False,
+) -> None:
+    """设置默认家庭。设了之后设备解析、device list、room list 都只看这个家庭。"""
+    app_ctx = _ctx(ctx)
+    config = read_config(app_ctx.root)
+
+    if clear:
+        config.pop("home", None)
+        write_config(config, app_ctx.root)
+        render.success("已取消默认家庭，现在所有家庭的设备都可见")
+        return
+
+    if not name:
+        current = app_ctx.default_home()
+        if current:
+            render.info(f"当前默认家庭：{current['name']}（{current['id']}）")
+        else:
+            render.info("还没有设默认家庭，所有家庭的设备都可见")
+        return
+
+    home = load_registry(app_ctx).find_home(name)
+    config["home"] = {"id": home["home_id"], "name": home["home_name"]}
+    write_config(config, app_ctx.root)
+    render.success(f"默认家庭已设为「{home['home_name']}」")

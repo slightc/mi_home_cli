@@ -7,7 +7,10 @@ from mi_home_cli.errors import AmbiguousReference, DeviceNotFound
 DATA = {
     "uid": "1",
     "synced_at": 1700000000,
-    "homes": [{"home_id": "h1", "home_name": "我家", "rooms": []}],
+    "homes": [
+        {"home_id": "h1", "home_name": "我家", "rooms": []},
+        {"home_id": "h2", "home_name": "老家", "rooms": []},
+    ],
     "devices": {
         "100": {
             "did": "100", "name": "客厅吸顶灯", "model": "yeelink.light.ml13",
@@ -93,3 +96,53 @@ def test_filter_by_online_and_search(registry: Registry):
     assert [d.did for d in registry.filter(online=False)] == ["200"]
     assert {d.did for d in registry.filter(search="灯")} == {"100", "200"}
     assert [d.did for d in registry.filter(room="客厅", model="airp")] == ["300"]
+
+
+def test_find_home_by_name_and_id(registry: Registry):
+    assert registry.find_home("我家")["home_id"] == "h1"
+    assert registry.find_home("h2")["home_name"] == "老家"
+    assert registry.find_home("老")["home_id"] == "h2"
+
+
+def test_find_home_unknown(registry: Registry):
+    with pytest.raises(DeviceNotFound):
+        registry.find_home("别人家")
+
+
+def test_find_home_ambiguous():
+    data = {
+        **DATA,
+        "homes": [
+            {"home_id": "h1", "home_name": "我家一号", "rooms": []},
+            {"home_id": "h2", "home_name": "我家二号", "rooms": []},
+        ],
+    }
+    with pytest.raises(AmbiguousReference):
+        Registry(data).find_home("我家")
+
+
+def test_filter_by_home_id_is_exact(registry: Registry):
+    """按 id 过滤，家庭改名了也不受影响。"""
+    assert len(registry.filter(home_id="h1")) == 3
+    assert registry.filter(home_id="h2") == []
+
+
+def test_default_home_scope_removes_ambiguity():
+    """两个家庭各有一盏同名的灯，限定家庭后就不歧义了。"""
+    data = {
+        **DATA,
+        "devices": {
+            "1": {
+                "did": "1", "name": "台灯", "model": "m", "urn": "u",
+                "online": True, "home_id": "h1", "home_name": "我家",
+            },
+            "2": {
+                "did": "2", "name": "台灯", "model": "m", "urn": "u",
+                "online": True, "home_id": "h2", "home_name": "老家",
+            },
+        },
+    }
+    registry = Registry(data)
+    with pytest.raises(AmbiguousReference):
+        registry.resolve("台灯")
+    assert registry.resolve("台灯", home_id="h1").did == "1"

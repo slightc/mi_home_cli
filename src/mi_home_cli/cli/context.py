@@ -23,6 +23,7 @@ class AppContext:
     region: str | None
     root: Path
     dry_run: bool = False
+    all_homes: bool = False
 
     @property
     def profile(self) -> Profile:
@@ -30,6 +31,20 @@ class AppContext:
 
     def session(self) -> Session:
         return Session(self.profile, region=self.region, timeout=self.timeout)
+
+    def default_home(self) -> dict[str, str] | None:
+        """配置里设的默认家庭，`--all-homes` 可临时忽略。"""
+        if self.all_homes:
+            return None
+        home = read_config(self.root).get("home")
+        if isinstance(home, dict) and home.get("id"):
+            return home
+        return None
+
+    def home_filter(self) -> dict[str, str]:
+        """喂给 Registry.filter / resolve 的家庭过滤条件。"""
+        home = self.default_home()
+        return {"home_id": home["id"]} if home else {}
 
     def resolved_region(self) -> str:
         """命令行 > 已登录的 profile > 配置文件 > cn。"""

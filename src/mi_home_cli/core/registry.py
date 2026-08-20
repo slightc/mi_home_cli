@@ -144,12 +144,15 @@ class Registry:
         self,
         *,
         home: str | None = None,
+        home_id: str | None = None,
         room: str | None = None,
         model: str | None = None,
         online: bool | None = None,
         search: str | None = None,
     ) -> list[Device]:
         def match(device: Device) -> bool:
+            if home_id and device.home_id != home_id:
+                return False
             if home and home.lower() not in device.home_name.lower():
                 return False
             if room and room.lower() not in device.room_name.lower():
@@ -167,6 +170,27 @@ class Registry:
         return [device for device in self.devices if match(device)]
 
     # ---------- 解析 ----------
+
+    def find_home(self, ref: str) -> dict[str, Any]:
+        """按名称或 home_id 找一个家庭。"""
+        lowered = ref.strip().lower()
+        stages = [
+            [h for h in self.homes if str(h["home_id"]) == ref.strip()],
+            [h for h in self.homes if h["home_name"].lower() == lowered],
+            [h for h in self.homes if lowered in h["home_name"].lower()],
+        ]
+        for candidates in stages:
+            if len(candidates) == 1:
+                return candidates[0]
+            if len(candidates) > 1:
+                raise AmbiguousReference(
+                    f"`{ref}` 匹配到多个家庭："
+                    + "、".join(h["home_name"] for h in candidates)
+                )
+        raise DeviceNotFound(
+            f"没有找到家庭 `{ref}`",
+            hint="用 `mi home list` 看看有哪些家庭",
+        )
 
     def resolve(self, ref: str, **filters: Any) -> Device:
         """把用户写的东西变成一台具体设备。
