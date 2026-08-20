@@ -25,8 +25,55 @@ mi action <摄像机> start-rtsp-stream --in 2
 | `chuangmi.camera.079ac1`（智能摄像机4 4K） | ❌ |
 | `chuangmi.camera.079ae2`（同产品另一 SKU） | ✅ |
 
-没有这个服务的型号只有 `p2p-stream`，那是小米私有的 cs2 协议，不在 miot-spec 的数据面里，
-只能靠 [go2rtc](https://go2rtc.org/internal/xiaomi/) 之类自己实现了 cs2 的项目取流。
+没有这个服务的型号只有 `p2p-stream`，只能靠
+[go2rtc](https://go2rtc.org/internal/xiaomi/) 之类自己实现了 cs2 的项目取流，原因见下。
+
+## 为什么 `p2p-stream` 在 OAuth2 下取不到画面
+
+结论：**取不到**，而且不是"接口没找到"，是身份边界决定的。实测证据：
+
+**1. 设备侧不给连接参数。** 调 `start-p2p-stream`（siid 9 / aiid 1）返回
+`code: 0` 但 `out` 为空——会话开了，可地址、session id、密钥一个都没有：
+
+```json
+{"did":"...","siid":9,"aiid":1,"code":0,"exe_time":99}
+```
+
+**2. 密钥要单独换，而那个接口在另一套身份下。** go2rtc（MIT）的实现里
+（`internal/xiaomi/xiaomi.go`），每次连接前要向云端换密钥：
+
+```go
+cloudUserRequest(url.User, "/v2/device/miss_get_vendor", params)
+// {"app_pubkey":"<客户端公钥>","did":"...","support_vendors":"TUTK_CS2_MTP"}
+// 老设备回退到 /device/devicepass
+```
+
+这些请求用 `ssecurity` 派生 `signedNonce` 做 RC4 签名，而 `ssecurity` 来自
+**账号密码登录**（`serviceLogin` → `passToken` + `serviceToken`）。
+
+**3. OAuth2 网关上没有这个接口。**
+
+| 请求 | 结果 |
+| --- | --- |
+| `ha.api.io.mi.com/app/v2/device/miss_get_vendor` | 404 |
+| `ha.api.io.mi.com/app/v2/device/devicepass` | 404 |
+| `ha.api.io.mi.com/v2/device/miss_get_vendor` | 204 |
+| `ha.api.io.mi.com/随便一个不存在的路径` | 204 |
+
+**204 是这个网关对所有非 `/app/v2/*` 请求的兜底响应**，不代表接口存在——拿乱写的
+路径对照过。
+
+**4. 拿 OAuth token 去敲 App 的接口域名会被拒。**
+
+```
+api.io.mi.com/app/v2/device/miss_get_vendor → 401 {"code":0,"message":"auth error"}
+```
+
+它只认 `serviceToken` + RC4 签名。
+
+所以：小米把**控制面**（spec 接口）开给了 OAuth2，**数据面**（p2p 密钥交换）留在账号
+密码那套身份里。本项目只用 OAuth2，这条路就是死的——除非哪天小米把
+`miss_get_vendor` 挂到 `/app/v2/*` 下面。
 
 ## 快照（2026-08-20，共 56 个型号）
 
