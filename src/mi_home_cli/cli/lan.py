@@ -1,6 +1,7 @@
 """`mi lan`：局域网直连的发现与探测。"""
 from __future__ import annotations
 
+import json
 import time
 from typing import Annotated, Optional
 
@@ -10,6 +11,7 @@ from .. import render
 from ..core import lan as lan_core
 from ..core.channel import LAN_CAPABLE_TYPES, lan_capable, locate
 from ..errors import MiCliError
+from ..render import OutputFormat
 from .context import AppContext, OutputOption, pick_output
 from .device import load_registry, resolve
 
@@ -110,6 +112,45 @@ def lan_status(
         )
         data["设备时间戳"] = endpoint.stamp
     render.output(data, pick_output(app_ctx, output))
+
+
+@app.command("raw")
+def lan_raw(
+    ctx: typer.Context,
+    device: Annotated[str, typer.Argument(help="设备名称、别名或 did")],
+    method: Annotated[
+        str, typer.Argument(help="miIO 方法名，如 miIO.info / get_properties")
+    ],
+    params: Annotated[
+        Optional[str], typer.Option("--params", help="参数，JSON 格式")
+    ] = None,
+    timeout: Annotated[float, typer.Option("--timeout", help="等待秒数")] = 5.0,
+    output: OutputOption = None,
+) -> None:
+    """直接对设备发一条 miIO 请求。
+
+    排查用：`miIO.info` 每台 miIO 设备都实现，能用来判断「协议通不通」和
+    「这个方法设备支不支持」是两回事。
+    """
+    app_ctx = _ctx(ctx)
+    target = resolve(app_ctx, device)
+    if not target.token:
+        raise MiCliError(f"{target.label} 没有局域网 token")
+    endpoint = locate(app_ctx.profile, target)
+    if endpoint is None:
+        raise MiCliError(f"局域网上找不到 {target.label}，先跑 `mi lan discover`")
+
+    try:
+        parsed = json.loads(params) if params else []
+    except json.JSONDecodeError as err:
+        raise MiCliError(f"--params 不是合法 JSON：{err}") from err
+
+    lan = lan_core.LanDevice(target.did, target.token, endpoint)
+    result = lan.call(method, parsed, timeout=timeout)
+    render.output(
+        result if isinstance(result, (dict, list)) else {"result": result},
+        pick_output(app_ctx, output, default=OutputFormat.json),
+    )
 
 
 @app.command("list")

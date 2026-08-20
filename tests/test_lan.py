@@ -233,3 +233,50 @@ def test_broadcast_elapsed_is_not_labelled_as_rtt():
     payload = struct.pack(">HHQI16s", 0x2131, 32, DID, STAMP, b"\xff" * 16)
     assert _parse_hello(payload, 654.0, "1.2.3.4").is_rtt is False
     assert _parse_hello(payload, 5.0, "1.2.3.4", is_rtt=True).is_rtt is True
+
+
+def test_auto_channel_falls_back_when_lan_call_fails():
+    """握手成功不代表设备愿意在局域网上干活——实测有设备对 get_properties
+
+    回 user ack timeout。回落必须做在每次调用上，只在定位阶段回落不够。
+    """
+    from mi_home_cli.core.channel import AutoChannel
+    from mi_home_cli.errors import MiCliError as _Err
+
+    class FailingLan:
+        name = "lan"
+
+        def get_props(self, params):
+            raise _Err("设备返回错误：user ack timeout")
+
+        def set_props(self, params):
+            raise _Err("超时")
+
+        def call_action(self, did, siid, aiid, values):
+            raise _Err("超时")
+
+    class Cloud:
+        name = "cloud"
+        calls = 0
+
+        def get_props(self, params):
+            Cloud.calls += 1
+            return [{"siid": 2, "piid": 1, "value": True, "code": 0}]
+
+        def set_props(self, params):
+            Cloud.calls += 1
+            return [{"code": 0}]
+
+        def call_action(self, did, siid, aiid, values):
+            Cloud.calls += 1
+            return {"code": 0}
+
+    notes: list[str] = []
+    channel = AutoChannel(FailingLan(), Cloud(), on_note=notes.append)
+    assert channel.get_props([{"siid": 2, "piid": 1}])[0]["value"] is True
+    assert "user ack timeout" in notes[0]
+    # 失败过一次之后不再重试局域网，免得每条命令都白等
+    channel.set_props([{"siid": 2, "piid": 1, "value": False}])
+    channel.call_action("d", 2, 1, [])
+    assert Cloud.calls == 3
+    assert len(notes) == 1

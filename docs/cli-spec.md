@@ -144,6 +144,7 @@ mi fan <device> [--on|--off] [--speed 3] [--swing]
 mi lan list                                    # 清单里哪些设备支持直连
 mi lan discover [--timeout 3] [--address ...]  # UDP 广播扫描并缓存 IP
 mi lan status <device>                         # 是否可直连、IP、延迟
+mi lan raw <device> <method> [--params JSON]   # 直接发一条 miIO 请求（排查用）
 ```
 
 控制命令加 `--channel lan` 就走直连，`--channel cloud` 强制走云端；

@@ -53,6 +53,48 @@ class CloudChannel:
         return self._api.call_action(did, siid, aiid, values)
 
 
+class AutoChannel:
+    """局域网优先，失败回落云端。
+
+    「找得到设备」不等于「设备愿意在局域网上干活」——实测有设备握手正常、
+    却对 get_properties 回 user ack timeout。所以回落必须做在每次调用上，
+    只在定位阶段回落是不够的。
+    """
+
+    name = "auto"
+
+    def __init__(self, lan: "LanChannel", cloud: CloudChannel, on_note: Any = None) -> None:
+        self._lan: LanChannel | None = lan
+        self._cloud = cloud
+        self._on_note = on_note
+
+    def _run(self, action: str, call):
+        if self._lan is not None:
+            try:
+                return call(self._lan)
+            except MiCliError as err:
+                # 这台设备这次会话内不再试局域网，免得每条命令都白等一次
+                self._lan = None
+                if self._on_note:
+                    self._on_note(
+                        f"[dim]局域网{action}失败（{err.message}），改走云端[/dim]"
+                    )
+        return call(self._cloud)
+
+    def get_props(self, params: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return self._run("读取", lambda channel: channel.get_props(params))
+
+    def set_props(self, params: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return self._run("写入", lambda channel: channel.set_props(params))
+
+    def call_action(
+        self, did: str, siid: int, aiid: int, values: list[Any]
+    ) -> dict[str, Any]:
+        return self._run(
+            "调用动作", lambda channel: channel.call_action(did, siid, aiid, values)
+        )
+
+
 class LanChannel:
     """直连设备。"""
 
@@ -147,4 +189,7 @@ def open_device_channel(
 
     if on_note:
         on_note(f"[dim]局域网直连 {endpoint.ip}（{endpoint.elapsed_ms:.0f}ms）[/dim]")
-    return LanChannel(LanDevice(device.did, device.token or "", endpoint))
+    lan = LanChannel(LanDevice(device.did, device.token or "", endpoint))
+    if mode == "lan":
+        return lan
+    return AutoChannel(lan, cloud, on_note=on_note)

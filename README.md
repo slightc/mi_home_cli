@@ -79,6 +79,7 @@ mi fan <设备> [--on|--off] [--speed 2] [--mode 自动] [--swing]
 mi lan list                 # 清单里哪些设备支持直连
 mi lan discover             # 广播扫描，缓存 IP
 mi lan status <设备>         # 可达性、IP、延迟
+mi lan raw <设备> miIO.info  # 直接发一条 miIO 请求（排查用）
 mi --channel lan get <设备>  # 强制走局域网；--channel cloud 强制走云端
 
 mi doctor
@@ -112,7 +113,9 @@ done
 
 局域网直连走 miIO 协议（UDP 54321，AES-128-CBC，密钥来自设备 token）。
 默认 `--channel auto`：能直连就直连（延迟从 1~2 秒降到几十毫秒），
-任何一步不成立就静默回落云端。只有 `connect_type` 在 `{0,8,12,23}` 且有 token
+任何一步不成立就静默回落云端——包括**调用本身失败**：有些设备握手正常，却对
+`get_properties` 回 `user ack timeout`，这时也会回落，不会把局域网的错误抛给你
+（`-v` 能看到发生了回落）。只有 `connect_type` 在 `{0,8,12,23}` 且有 token
 的设备可以直连——蓝牙 Mesh、ZigBee 那些经网关接入的走不了，`mi lan list` 能看出
 哪些可以。
 

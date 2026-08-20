@@ -33,6 +33,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from ..errors import DeviceOffline, MiCliError, NetworkError
 
 PORT = 54321
+# 设备处理 miot-spec 请求比握手慢得多，握手几十毫秒，属性读写可能要几秒
+CALL_TIMEOUT = 3.0
 MAGIC = 0x2131
 HEADER_LEN = 32
 HELLO = bytes.fromhex("21310020" + "ffffffff" * 7)
@@ -192,7 +194,12 @@ class LanDevice:
     # ---------- 调用 ----------
 
     def call(
-        self, method: str, params: Any, *, timeout: float = 2.0, retries: int = 2
+        self,
+        method: str,
+        params: Any,
+        *,
+        timeout: float = CALL_TIMEOUT,
+        retries: int = 2,
     ) -> Any:
         self._msg_id = (self._msg_id + 1) % 10000
         payload = {"id": self._msg_id, "method": method, "params": params}
