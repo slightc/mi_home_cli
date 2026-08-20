@@ -132,16 +132,53 @@ mi_home_cli/
 
 ### 3.2 登录流程（CLI 版本的难点）
 
-上游是 HA 起了 Web 服务接 `redirect_uri`。CLI 的方案：
+**redirect_uri 是被服务端白名单锁死的**，这是整个 CLI 最硬的约束。
 
-1. 默认：本地起 `http://127.0.0.1:<port>`（默认 `9527`，可 `--port`）作为 `redirect_uri`，`webbrowser.open()` 打开授权页，回调页面拿到 `code` 后显示「登录成功，可关闭窗口」，进程继续换 token。
-2. **风险**：小米 OAuth 可能对 `redirect_uri` 有白名单校验，`127.0.0.1` 不一定放行。因此必须同时提供兜底：
-   - `mi auth login --manual`：打印授权 URL，用户在任意浏览器完成后，把浏览器地址栏里被重定向到的完整 URL（或其中的 `code`）粘回来。
-   - `--redirect-url <url>` 允许显式指定（例如复用 `http://homeassistant.local:8123`）。
-3. 校验 `state`，防止粘错回调。
-4. token 过期前自动 `refresh`；`refresh` 也失败则提示重新 `login`，退出码 `10`。
+上游 `miot/const.py` 里写着：
 
-**M1 第一件事就是验证 `127.0.0.1` 回调是否被接受**，结果直接决定默认登录体验。
+```python
+# Registered in Xiaomi OAuth 2.0 Service
+# DO NOT CHANGE UNLESS YOU HAVE AN ADMINISTRATOR PERMISSION
+OAUTH_REDIRECT_URL: str = 'http://homeassistant.local:8123'
+```
+
+HA 再拼上自己的 webhook 路径，最终是
+`http://homeassistant.local:8123/api/webhook/{virtual_did}`。
+
+实测授权接口对各种 redirect_uri 的反应：
+
+| redirect_uri | 结果 |
+| --- | --- |
+| `http://homeassistant.local:8123/api/webhook/123456` | 302 → 登录页 ✅ |
+| `http://homeassistant.local:8123/mi-home-cli/callback` | 302 ✅ |
+| `http://homeassistant.local:8123/x?foo=bar` | 302 ✅ |
+| `https://homeassistant.local:8123/x` | 302 ✅ |
+| `http://homeassistant.local:9527/x` | `invalid redirect uri` ❌ |
+| `http://localhost:8123/x` | `invalid redirect uri` ❌ |
+| `http://127.0.0.1:9527` | `invalid redirect uri` ❌ |
+
+**结论：host 必须是 `homeassistant.local:8123`；scheme 与 path、query 不校验。**
+所以 CLI 用 `http://homeassistant.local:8123/mi-home-cli/callback`，
+路径上带自己的标识，避免和真的 HA webhook 混淆。
+
+于是要自动收到 code，得同时满足两件事：浏览器把 `homeassistant.local` 解析到
+跑 CLI 的机器，且该机器的 8123 端口由我们监听。实现按下面的顺序尽力而为，
+每一步失败都不阻断流程：
+
+1. 端口 8123 能 bind → 起本地 HTTP 服务（任意路径都收，只认 `code`/`state`）。
+   本机在跑 Home Assistant 时端口会被占，直接跳到粘贴方式。
+2. `homeassistant.local` 已经解析到本机（hosts 或局域网里的 mDNS）→ 直接可用。
+3. 否则装了 `zeroconf` 就自己广播一条 mDNS 记录，把 `homeassistant.local`
+   指向本机 IP。局域网里有真 HA 时会撞名，撞了就放弃。
+4. **粘贴兜底，永远可用**：浏览器跳到打不开的地址后，地址栏里仍然带着
+   `?code=...&state=...`，让用户整段粘回终端。本地服务和粘贴同时等待，
+   谁先到用谁；`--manual` 只走粘贴。
+
+安全上：`state` 每次登录随机生成，本地回调的 `state` 必须完全匹配才接受
+（不匹配就是别人往这个端口打的请求）；粘贴内容缺 `state` 时给出警告。
+
+token 到期前（用掉 70% 有效期）自动续期；续期失败则提示重新 `mi auth login`，
+退出码 `10`。
 
 ---
 
@@ -195,7 +232,7 @@ CLI 的体验成败不在协议，在于**别让人记 did 和 siid/piid**。
 
 | 阶段 | 内容 | 产出 |
 | --- | --- | --- |
-| **M1 打通** | OAuth 登录（含 `--manual` 兜底）、token 存储/刷新、`auth *`、`home list`、`device list/show` | 能看到自己的设备 |
+| **M1 打通** | ✅ OAuth 登录（本地回调 + mDNS + `--manual` 兜底）、token 存储/刷新、`auth *`、`profile *`、`doctor`；⬜ `home list`、`device list/show` | 能登录、能看到自己的设备 |
 | **M2 控制** | spec 拉取与缓存、`spec show`、`get`/`set`/`action`、设备与属性解析、值转换、`-o json` | 核心可用 |
 | **M3 顺手** | `on/off/toggle`、`light`/`climate` 等语义命令、别名、`--dry-run`、shell 补全、`doctor` | 日常能用 |
 | **M4 实时** | 云端 MQTT `watch`（属性/事件/在线状态），`--follow` 流式输出 | 可做脚本触发 |
@@ -212,7 +249,8 @@ CLI 的体验成败不在协议，在于**别让人记 did 和 siid/piid**。
 ## 8. 已知风险
 
 1. **接口非公开契约**：`app/v2/*` 是米家给 HA 集成用的接口，随时可能变；把 URL 和字段集中在 `core/cloud.py` 一处，方便跟进。
-2. **`redirect_uri` 白名单**（见 3.2）——M1 优先验证。
+2. **`redirect_uri` 白名单**：已实测确认 host 锁死在 `homeassistant.local:8123`
+   （见 3.2）。小米若调整白名单，自动回调会失效，粘贴方式不受影响。
 3. **频率限制**：批量读属性要沿用「聚合 + 单请求 ≤150 条」的策略，`watch` 用 MQTT 而不是轮询。
 4. **局域网覆盖有限**：只对直连 WiFi 设备有效，且上游文档提示该功能可能引发异常，因此默认关闭，`--channel lan` 或配置开启。
 5. **凭据安全**：device token 等价于局域网控制权，文件权限 + 输出打码 + 不写日志三重防护。

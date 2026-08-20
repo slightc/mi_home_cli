@@ -23,15 +23,23 @@
 ## 1. 认证 `mi auth`
 
 ```bash
-mi auth login [--region cn] [--port 9527] [--manual] [--redirect-url URL] [--no-browser]
-mi auth status                 # 登录状态、uid、昵称、token 剩余有效期
+mi auth login [--region cn] [--manual] [--no-browser] [--no-mdns]
+              [--redirect-url URL] [--wait 300] [--skip-confirm]
+mi auth status [--check]       # 登录状态、uid、昵称、token 剩余有效期
 mi auth refresh                # 手动刷新 access_token
 mi auth logout [--purge]       # 退出；--purge 连同设备缓存一起删
-mi auth whoami                 # 打印当前 profile 的账号信息
-mi profile list|use|remove
+mi auth whoami                 # 打印当前账号信息（实时查询）
+mi profile list|use|remove|path
 ```
 
-`--manual`：不起本地服务，打印授权链接，用户粘回重定向后的完整 URL 或 `code`（`redirect_uri` 白名单兜底方案）。
+小米对 `redirect_uri` 有白名单，host 必须是 `homeassistant.local:8123`
+（实测见 [design.md §3.2](./design.md#32-登录流程cli-版本的难点)），
+所以登录时 CLI 会监听本机 8123 并尝试用 mDNS 把这个域名指向本机；
+不成功也没关系，把浏览器地址栏里的整段地址粘回终端即可。
+
+- `--manual`：不监听端口，只走粘贴。
+- `--no-mdns`：不广播 mDNS（局域网里有真的 Home Assistant 时用）。
+- `--wait`：等待授权的秒数，默认 300。
 
 ## 2. 家庭 / 房间 / 设备
 
