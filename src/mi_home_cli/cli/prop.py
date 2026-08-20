@@ -10,7 +10,7 @@ from .. import render
 from ..core.channel import DeviceChannel, open_device_channel
 from ..core.registry import Device
 from ..core.session import Session
-from ..core.spec import DeviceSpec, Property, format_value, parse_value
+from ..core.spec import Action, DeviceSpec, Property, format_value, parse_value
 from ..errors import (
     CloudError,
     InvalidValue,
@@ -75,6 +75,34 @@ def read_current(
 # 写入被接受的返回码。0 是明确成功；1 是「已接受、设备执行中」——部分设备
 # （如 dwdz.switch.sw0a01）对每次写入都回 1，实际操作是成功的，不能当失败。
 ACCEPTED_CODES = frozenset({0, 1})
+
+
+def describe_action_output(
+    spec: DeviceSpec, action: Action, out: Any
+) -> dict[str, Any] | Any:
+    """把动作的返回值配上属性名。
+
+    out 里只有值（或 {piid, value}），光打印一个数组没法看——比如摄像机的
+    start-rtsp-stream 返回的是 [地址, 快照地址, 过期时间]，配上名字才有意义。
+    """
+    if not out:
+        return "-"
+    if not isinstance(out, list):
+        return out
+
+    named: dict[str, Any] = {}
+    if all(isinstance(item, dict) and "piid" in item for item in out):
+        pairs = [(item["piid"], item.get("value")) for item in out]
+    elif len(out) == len(action.out_piids):
+        pairs = list(zip(action.out_piids, out))
+    else:
+        # 对不上就原样给出去，别猜
+        return out
+    for piid, value in pairs:
+        prop = spec.property_at(action.siid, piid)
+        key = prop.name if prop else str(piid)
+        named[key] = format_value(prop, value) if prop else value
+    return named
 
 
 def _explain_code(code: int) -> str:
@@ -336,15 +364,17 @@ def action(
             target.did, target_action.siid, target_action.aiid, parsed
         )
     code = int(result.get("code", -1))
-    render.output(
-        {
-            "设备": target.label,
-            "动作": target_action.full_name,
-            "结果": _explain_code(code),
-            "返回": result.get("out") or "-",
-        },
-        fmt,
-    )
+    data: dict[str, Any] = {
+        "设备": target.label,
+        "动作": target_action.full_name,
+        "结果": _explain_code(code),
+    }
+    named = describe_action_output(spec, target_action, result.get("out"))
+    if isinstance(named, dict):
+        data.update({f"↳ {key}": value for key, value in named.items()})
+    else:
+        data["返回"] = named
+    render.output(data, fmt)
     if code != 0:
         raise typer.Exit(code=CloudError.exit_code)
 
