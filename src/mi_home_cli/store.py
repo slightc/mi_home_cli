@@ -161,6 +161,20 @@ class Profile:
     def spec_dir(self) -> Path:
         return self.path / "spec"
 
+    @property
+    def aliases_path(self) -> Path:
+        return self.path / "aliases.json"
+
+    def write_devices(self, data: dict[str, Any]) -> None:
+        # 设备清单里带局域网 token，按凭据同等对待
+        _write_private_json(self.devices_path, data)
+
+    def read_aliases(self) -> dict[str, str]:
+        return _read_json(self.aliases_path) or {}
+
+    def write_aliases(self, aliases: dict[str, str]) -> None:
+        _write_private_json(self.aliases_path, aliases)
+
     def exists(self) -> bool:
         return self.auth_path.exists()
 

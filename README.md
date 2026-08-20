@@ -39,14 +39,36 @@ uv run mi auth status
 ## 已经能用的命令
 
 ```bash
-mi auth login|status|refresh|whoami|logout
+# 登录
+mi auth login|status|refresh|whoami|logout|exchange
 mi profile list|use|remove|path
+
+# 看有什么
+mi home list
+mi room list [--home 我家]
+mi device list [--home] [--room] [--model] [--search] [--online|--offline] [--wide]
+mi device show <设备>
+mi device sync
+mi device alias set <设备> <别名>
+mi spec show <设备> [--writable] [--actions]
+mi spec search <设备> <关键词>
+mi spec dump <设备>
+
+# 控制
+mi get <设备> [属性...]           # 不写属性就读全部可读属性
+mi set <设备> <属性=值>...
+mi action <设备> [动作] [--in 值]...
+mi on|off|toggle <设备>
+
 mi doctor
 mi version
 ```
 
-设备控制相关命令（`mi device list`、`mi get`、`mi set`、`mi action`、`mi watch`）
-按 [docs/cli-spec.md](docs/cli-spec.md) 分期实现中。
+设备可以用名称、别名、`房间/名称`、did 或型号来指；属性可以写 `on`、
+`light.brightness` 或 `2.1`，枚举值可以直接写中文描述（`mode=睡眠`）。
+加 `--dry-run` 只解析校验不下发，加 `-o json` 输出给脚本用。
+
+局域网控制和 `mi watch` 还没做，见 [docs/cli-spec.md](docs/cli-spec.md)。
 
 全局参数（`--profile` / `--region` / `--output` / `--timeout`）放在子命令之前，
 例如 `mi -o json auth status`；`-o` 也可以直接跟在子命令后面，或用环境变量

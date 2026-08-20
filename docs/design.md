@@ -253,9 +253,9 @@ CLI 的体验成败不在协议，在于**别让人记 did 和 siid/piid**。
 
 | 阶段 | 内容 | 产出 |
 | --- | --- | --- |
-| **M1 打通** | ✅ OAuth 登录（本地回调 + mDNS + `--manual` 兜底）、token 存储/刷新、`auth *`、`profile *`、`doctor`；⬜ `home list`、`device list/show` | 能登录、能看到自己的设备 |
-| **M2 控制** | spec 拉取与缓存、`spec show`、`get`/`set`/`action`、设备与属性解析、值转换、`-o json` | 核心可用 |
-| **M3 顺手** | `on/off/toggle`、`light`/`climate` 等语义命令、别名、`--dry-run`、shell 补全、`doctor` | 日常能用 |
+| **M1 打通** | ✅ OAuth 登录（本地回调 + mDNS + `--manual` 兜底）、token 存储/刷新、`auth *`、`profile *`、`doctor` | 能登录 |
+| **M2 控制** | ✅ `home/room/device list`、设备清单缓存与解析、spec 拉取与缓存、`spec show/search/dump`、`get`/`set`/`action`、值转换、`on/off/toggle`、`-o json`、`--dry-run` | 核心可用 |
+| **M3 顺手** | `light`/`climate`/`cover`/`fan` 等语义命令、`device alias`（✅ 已有）、shell 补全 | 日常能用 |
 | **M4 实时** | 云端 MQTT `watch`（属性/事件/在线状态），`--follow` 流式输出 | 可做脚本触发 |
 | **M5 本地** | 局域网通道（`python-miio`）、`lan discover`、`AutoChannel` 回落 | 低延迟、断网可用 |
 | 可选 | `repl` 交互模式、场景（`/app/v2/scene/*` 需自行探索验证，上游未使用）、中枢网关控制 | — |

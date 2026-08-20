@@ -22,6 +22,7 @@ class AppContext:
     quiet: bool
     region: str | None
     root: Path
+    dry_run: bool = False
 
     @property
     def profile(self) -> Profile:
@@ -52,5 +53,18 @@ OutputOption = Annotated[
 ]
 
 
-def pick_output(ctx: AppContext, override: OutputFormat | None) -> OutputFormat:
-    return override or ctx.output
+def pick_output(
+    ctx: AppContext,
+    override: OutputFormat | None,
+    default: OutputFormat | None = None,
+) -> OutputFormat:
+    """子命令上的 -o 优先；没写就用全局值。
+
+    default 用于「表格没意义」的命令（比如 spec dump），此时只有用户显式指定
+    过全局 -o 才尊重全局值。
+    """
+    if override:
+        return override
+    if default and ctx.output is OutputFormat.table:
+        return default
+    return ctx.output

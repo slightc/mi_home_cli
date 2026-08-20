@@ -13,6 +13,9 @@ from ..errors import MiCliError
 from ..render import OutputFormat
 from ..store import config_dir
 from . import auth as auth_cli
+from . import device as device_cli
+from . import prop as prop_cli
+from . import spec_cmd as spec_cli
 from . import doctor as doctor_cli
 from .context import AppContext, OutputOption, default_profile_name
 
@@ -23,6 +26,18 @@ app = typer.Typer(
 )
 app.add_typer(auth_cli.app, name="auth")
 app.add_typer(auth_cli.profile_app, name="profile")
+app.add_typer(device_cli.app, name="device")
+app.add_typer(device_cli.home_app, name="home")
+app.add_typer(device_cli.room_app, name="room")
+app.add_typer(spec_cli.app, name="spec")
+
+# 高频命令挂在顶层：mi get / mi set / mi action / mi on|off|toggle
+app.command("get")(prop_cli.get)
+app.command("set")(prop_cli.set_)
+app.command("action")(prop_cli.action)
+app.command("on")(prop_cli.on)
+app.command("off")(prop_cli.off)
+app.command("toggle")(prop_cli.toggle)
 
 
 @app.callback()
@@ -48,6 +63,9 @@ def main_callback(
     ] = float(const.HTTP_TIMEOUT),
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
     quiet: Annotated[bool, typer.Option("--quiet", "-q")] = False,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="只解析和校验，不真的下发")
+    ] = False,
 ) -> None:
     root: Path = config_dir()
     ctx.obj = AppContext(
@@ -58,6 +76,7 @@ def main_callback(
         quiet=quiet,
         region=region,
         root=root,
+        dry_run=dry_run,
     )
 
 
