@@ -362,8 +362,16 @@ uv run pytest
 | 语义命令、别名、默认家庭 | ✅ |
 | 云端 MQTT 实时推送 | ✅ |
 | 局域网直连（miIO） | ✅ |
-| 米家场景 / 自动化 | ❌ 上游未使用相关接口，需自行调研 |
+| 米家场景 / 自动化 | ❌ 需要账号密码那套身份，本项目只用 OAuth2 |
+| 摄像机报警录像回放 | ❌ 同上 |
+| 摄像机实时推流地址 | ⚠️ 型号带 `camera-stream-for-*` 服务的可以：`mi action <设备> start-rtsp-stream` |
 | 中枢网关本地控制 | ❌ 需要证书，仅 cn 区，复杂度高 |
+
+**只用 OAuth2** 是一条明确的边界：授权在浏览器里完成，CLI 只拿到一个有期限、可撤销的
+token，全程不碰账号密码。代价是上面标 ❌ 的那些接口用不了——它们需要
+`serviceToken` + `ssecurity` 那套身份。需要的话
+[al-one/hass-xiaomi-miot](https://github.com/al-one/hass-xiaomi-miot)（Apache-2.0）
+覆盖得更全。
 
 设计与协议细节见 [docs/design.md](docs/design.md)，完整命令参考见
 [docs/cli-spec.md](docs/cli-spec.md)。

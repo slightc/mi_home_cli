@@ -244,3 +244,63 @@ def test_float_is_shown_with_significant_digits(spec):
         access=["read"], service="environment", unit="mg/m3",
     )
     assert format_value(hcho, 0.019) == "0.019 mg/m³"
+
+
+def test_action_output_gets_property_names():
+    """动作返回的是一串裸值，配上属性名才看得懂。
+
+    典型场景：支持官方推流的摄像机，start-rtsp-stream 返回
+    [地址, 快照地址, 过期时间]。
+    """
+    from mi_home_cli.cli.prop import describe_action_output
+
+    instance = {
+        "type": "urn:miot-spec-v2:device:camera:0000A01C:x:1",
+        "description": "Camera",
+        "services": [
+            {
+                "iid": 3,
+                "type": "urn:miot-spec-v2:service:camera-stream-for-amazon-alexa:1:x:1",
+                "properties": [
+                    {
+                        "iid": 7,
+                        "type": "urn:miot-spec-v2:property:stream-address:1:x:1",
+                        "description": "Stream Address",
+                        "format": "string",
+                        "access": [],
+                    },
+                    {
+                        "iid": 9,
+                        "type": "urn:miot-spec-v2:property:expiration-time:1:x:1",
+                        "description": "Expiration Time",
+                        "format": "string",
+                        "access": [],
+                    },
+                ],
+                "actions": [
+                    {
+                        "iid": 1,
+                        "type": "urn:miot-spec-v2:action:start-rtsp-stream:1:x:1",
+                        "description": "Start RTSP Stream",
+                        "in": [],
+                        "out": [7, 9],
+                    }
+                ],
+            }
+        ],
+    }
+    spec = DeviceSpec(instance["type"], instance, {})
+    action = spec.find_action("start-rtsp-stream")
+
+    # 裸值数组：按 out 的顺序配名字
+    assert describe_action_output(spec, action, ["rtsp://x", "2026-08-20"]) == {
+        "stream-address": "rtsp://x",
+        "expiration-time": "2026-08-20",
+    }
+    # {piid, value} 形式也认
+    assert describe_action_output(
+        spec, action, [{"piid": 7, "value": "rtsp://y"}]
+    ) == {"stream-address": "rtsp://y"}
+    # 数量对不上就原样给出去，别猜
+    assert describe_action_output(spec, action, [1, 2, 3]) == [1, 2, 3]
+    assert describe_action_output(spec, action, []) == "-"
