@@ -404,6 +404,14 @@ def _switch(app_ctx: AppContext, device: str, value: bool | None) -> None:
         )
     # 多个服务都有 on 时（比如带夜灯的灯），取 siid 最小的主服务
     prop = min(candidates, key=lambda p: (p.siid, p.piid))
+    if app_ctx.dry_run:
+        # toggle 的目标值取决于当前状态，dry-run 不读设备就说不准，如实标注
+        target_value = "取反当前状态" if value is None else format_value(prop, value)
+        render.info(
+            f"[dim]--dry-run：{target.label}（{target.location}）"
+            f" → {prop.full_name}（{prop.ref}）= {target_value}[/dim]"
+        )
+        return
     with app_ctx.session() as session:
         api = _channel(app_ctx, session, target)
         if value is None:
@@ -447,25 +455,28 @@ def _switch(app_ctx: AppContext, device: str, value: bool | None) -> None:
 def on(
     ctx: typer.Context,
     device: Annotated[str, typer.Argument(help="设备名称、别名或 did")],
+    dry_run: DryRunOption = None,
     verify: VerifyOption = None,
 ) -> None:
     """打开设备。"""
-    _switch(apply_write_flags(_ctx(ctx), verify=verify), device, True)
+    _switch(apply_write_flags(_ctx(ctx), dry_run, verify), device, True)
 
 
 def off(
     ctx: typer.Context,
     device: Annotated[str, typer.Argument(help="设备名称、别名或 did")],
+    dry_run: DryRunOption = None,
     verify: VerifyOption = None,
 ) -> None:
     """关闭设备。"""
-    _switch(apply_write_flags(_ctx(ctx), verify=verify), device, False)
+    _switch(apply_write_flags(_ctx(ctx), dry_run, verify), device, False)
 
 
 def toggle(
     ctx: typer.Context,
     device: Annotated[str, typer.Argument(help="设备名称、别名或 did")],
+    dry_run: DryRunOption = None,
     verify: VerifyOption = None,
 ) -> None:
     """切换开关。"""
-    _switch(apply_write_flags(_ctx(ctx), verify=verify), device, None)
+    _switch(apply_write_flags(_ctx(ctx), dry_run, verify), device, None)
