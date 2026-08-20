@@ -19,6 +19,10 @@ from .session import Session
 LAN_CAPABLE_TYPES = frozenset({0, 8, 12, 23})
 # 缓存里的 IP 多久之内直接试，超了就当过期（设备可能换了 IP）
 LAN_CACHE_TTL = 24 * 3600
+# 某台设备在局域网上干不了活（比如老固件不认 get_properties）就记下来，
+# 这段时间内 auto 模式直接走云端，不再每条命令都白试一次。固件升级可能会
+# 补上支持，所以会过期；`mi lan discover` 也会清掉这个标记。
+LAN_FAILURE_TTL = 7 * 24 * 3600
 
 
 class DeviceChannel(Protocol):
@@ -63,18 +67,27 @@ class AutoChannel:
 
     name = "auto"
 
-    def __init__(self, lan: "LanChannel", cloud: CloudChannel, on_note: Any = None) -> None:
+    def __init__(
+        self,
+        lan: "LanChannel",
+        cloud: CloudChannel,
+        on_note: Any = None,
+        on_failure: Any = None,
+    ) -> None:
         self._lan: LanChannel | None = lan
         self._cloud = cloud
         self._on_note = on_note
+        self._on_failure = on_failure
 
     def _run(self, action: str, call):
         if self._lan is not None:
             try:
                 return call(self._lan)
             except MiCliError as err:
-                # 这台设备这次会话内不再试局域网，免得每条命令都白等一次
+                # 这台设备本次不再试局域网，并记到缓存里，让后续命令也别白试
                 self._lan = None
+                if self._on_failure:
+                    self._on_failure(err.message)
                 if self._on_note:
                     self._on_note(
                         f"[dim]局域网{action}失败（{err.message}），改走云端[/dim]"
@@ -117,6 +130,31 @@ class LanChannel:
         self, did: str, siid: int, aiid: int, values: list[Any]
     ) -> dict[str, Any]:
         return self._device.call_action(did, siid, aiid, values)
+
+
+def record_lan_failure(profile: Profile, did: str, reason: str) -> None:
+    cache = profile.read_lan()
+    entry = cache.setdefault(did, {})
+    entry["failed_at"] = int(time.time())
+    entry["reason"] = reason
+    profile.write_lan(cache)
+
+
+def lan_failure(profile: Profile, did: str) -> tuple[int, str] | None:
+    """这台设备最近一次局域网调用失败的时间和原因，没有或已过期返回 None。"""
+    entry = profile.read_lan().get(did) or {}
+    failed_at = entry.get("failed_at")
+    if not failed_at or time.time() - failed_at > LAN_FAILURE_TTL:
+        return None
+    return int(failed_at), str(entry.get("reason", ""))
+
+
+def clear_lan_failures(profile: Profile) -> None:
+    cache = profile.read_lan()
+    for entry in cache.values():
+        entry.pop("failed_at", None)
+        entry.pop("reason", None)
+    profile.write_lan(cache)
 
 
 def lan_capable(device: Device) -> bool:
@@ -178,6 +216,13 @@ def open_device_channel(
             raise MiCliError(f"{device.label} 不能局域网直连：{reason}")
         return cloud
 
+    failure = lan_failure(profile, device.did)
+    if failure and mode == "auto":
+        # 之前试过、这台设备在局域网上干不了活，别再浪费一轮往返
+        if on_note:
+            on_note(f"[dim]跳过局域网（上次失败：{failure[1]}），走云端[/dim]")
+        return cloud
+
     endpoint = locate(profile, device)
     if endpoint is None:
         if mode == "lan":
@@ -192,4 +237,9 @@ def open_device_channel(
     lan = LanChannel(LanDevice(device.did, device.token or "", endpoint))
     if mode == "lan":
         return lan
-    return AutoChannel(lan, cloud, on_note=on_note)
+    return AutoChannel(
+        lan,
+        cloud,
+        on_note=on_note,
+        on_failure=lambda reason: record_lan_failure(profile, device.did, reason),
+    )

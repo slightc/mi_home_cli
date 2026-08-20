@@ -9,7 +9,13 @@ import typer
 
 from .. import render
 from ..core import lan as lan_core
-from ..core.channel import LAN_CAPABLE_TYPES, lan_capable, locate
+from ..core.channel import (
+    LAN_CAPABLE_TYPES,
+    clear_lan_failures,
+    lan_capable,
+    lan_failure,
+    locate,
+)
 from ..errors import MiCliError
 from ..render import OutputFormat
 from .context import AppContext, OutputOption, pick_output
@@ -55,6 +61,8 @@ def lan_discover(
         }
     )
     app_ctx.profile.write_lan(cache)
+    # 重新扫到了就当作新证据，清掉「这台设备局域网干不了活」的标记
+    clear_lan_failures(app_ctx.profile)
 
     rows = []
     for did, endpoint in sorted(found.items(), key=lambda kv: kv[1].ip):
@@ -111,13 +119,22 @@ def lan_status(
             else f"{endpoint.elapsed_ms:.0f}ms（广播应答用时，非往返延迟）"
         )
         data["设备时间戳"] = endpoint.stamp
+    failure = lan_failure(app_ctx.profile, target.did)
+    if failure:
+        failed_at, reason = failure
+        data["上次局域网调用"] = (
+            f"失败：{reason}（{time.strftime('%m-%d %H:%M', time.localtime(failed_at))}）"
+        )
+        data["说明"] = "auto 模式会直接走云端；`mi lan discover` 可清除这个标记"
     render.output(data, pick_output(app_ctx, output))
 
 
 @app.command("raw")
 def lan_raw(
     ctx: typer.Context,
-    device: Annotated[str, typer.Argument(help="设备名称、别名或 did")],
+    device: Annotated[
+        str, typer.Argument(help="设备名称、别名或 did（名字带空格要加引号）")
+    ],
     method: Annotated[
         str, typer.Argument(help="miIO 方法名，如 miIO.info / get_properties")
     ],

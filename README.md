@@ -115,7 +115,13 @@ done
 默认 `--channel auto`：能直连就直连（延迟从 1~2 秒降到几十毫秒），
 任何一步不成立就静默回落云端——包括**调用本身失败**：有些设备握手正常，却对
 `get_properties` 回 `user ack timeout`，这时也会回落，不会把局域网的错误抛给你
-（`-v` 能看到发生了回落）。只有 `connect_type` 在 `{0,8,12,23}` 且有 token
+（`-v` 能看到发生了回落）。失败会记进 `lan.json`，后续命令直接走云端，
+7 天后或 `mi lan discover` 之后重新尝试。
+
+能不能直连是**按设备固件**定的：实测米家空气净化器 6 走局域网完全可用，
+而老固件的 Yeelight 台灯 `miIO.info` 通、`get_properties` 却回
+`user ack timeout`。用 `mi lan raw <设备> miIO.info` 可以区分「协议不通」和
+「这个方法设备不支持」。只有 `connect_type` 在 `{0,8,12,23}` 且有 token
 的设备可以直连——蓝牙 Mesh、ZigBee 那些经网关接入的走不了，`mi lan list` 能看出
 哪些可以。
 

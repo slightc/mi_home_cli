@@ -280,3 +280,36 @@ def test_auto_channel_falls_back_when_lan_call_fails():
     channel.call_action("d", 2, 1, [])
     assert Cloud.calls == 3
     assert len(notes) == 1
+
+
+def test_lan_failure_is_remembered_across_runs(tmp_path):
+    """一次会话内不再重试还不够——下一条命令不该再白试一遍。"""
+    import time as _t
+
+    from mi_home_cli.core.channel import (
+        clear_lan_failures,
+        lan_failure,
+        record_lan_failure,
+    )
+    from mi_home_cli.store import Profile
+
+    profile = Profile("default", root=tmp_path)
+    assert lan_failure(profile, "d1") is None
+
+    record_lan_failure(profile, "d1", "user ack timeout")
+    failed_at, reason = lan_failure(profile, "d1")
+    assert reason == "user ack timeout"
+    assert abs(failed_at - int(_t.time())) < 5
+
+    # 重新扫描是新证据，标记要清掉（固件升级可能补上了支持）
+    clear_lan_failures(profile)
+    assert lan_failure(profile, "d1") is None
+
+
+def test_lan_failure_expires(tmp_path, monkeypatch):
+    from mi_home_cli.core import channel as channel_module
+    from mi_home_cli.store import Profile
+
+    profile = Profile("default", root=tmp_path)
+    profile.write_lan({"d1": {"failed_at": 1, "reason": "旧的"}})
+    assert channel_module.lan_failure(profile, "d1") is None
