@@ -177,3 +177,20 @@ def test_connect_type_zero_survives():
 
     missing = Device.load({"did": "4", "name": "灯", "model": "m", "urn": "u"})
     assert missing.connect_type == -1
+
+
+def test_json_shape_is_script_friendly(registry: Registry):
+    """给脚本/agent 的 JSON 用英文键和原始类型。
+
+    表格里的「名称」「在线: 是」是给人看的，当 JSON 的键和值都很难用。
+    """
+    device = registry.resolve("300")
+    data = device.to_json()
+    assert data["did"] == "300"
+    assert data["name"] == "空气净化器"
+    assert data["alias"] == "净化"
+    assert data["online"] is True  # 布尔就是布尔，不是「是」
+    assert data["room"] == "客厅"
+    assert data["connect_type"] == -1
+    # 空值给 null 而不是「-」，方便判空
+    assert registry.resolve("100").to_json()["alias"] is None
