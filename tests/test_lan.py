@@ -220,11 +220,11 @@ def test_hello_did_is_four_bytes_not_eight():
     payload = (
         struct.pack(">HH", 0x2131, 32)
         + struct.pack(">I", 16)  # unknown ≠ 0
-        + struct.pack(">I", 1325504934)  # did
+        + struct.pack(">I", 1325504934)  # did，仍在 32 位范围内
         + struct.pack(">I", STAMP)
         + b"\xff" * 16
     )
-    endpoint = _parse_hello(payload, 0, "192.168.5.247")
+    endpoint = _parse_hello(payload, 0, "192.0.2.9")
     assert endpoint.did == "1325504934"
 
 
