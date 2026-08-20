@@ -82,9 +82,9 @@ def main_callback(
         bool,
         typer.Option(
             "--verify/--no-verify",
-            help="写入后回读确认（默认开；关掉可省一次请求）",
+            help="写入后回读确认真实状态（默认不回读，省一次请求）",
         ),
-    ] = True,
+    ] = False,
 ) -> None:
     root: Path = config_dir()
     config = read_config(root)

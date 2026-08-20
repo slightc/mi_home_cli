@@ -24,7 +24,7 @@ class AppContext:
     root: Path
     dry_run: bool = False
     all_homes: bool = False
-    verify: bool = True
+    verify: bool = False
 
     @property
     def profile(self) -> Profile:
