@@ -62,13 +62,36 @@ def test_expiry_math():
     assert dead.expired
 
 
-def test_device_id_is_stable(profile: Profile):
-    first = profile.device_id()
-    assert first.startswith("cli.")
-    assert profile.device_id() == first
-    # 登录之后以 auth.json 里记的为准
-    profile.write_auth(_auth(device_id="cli.from-auth"))
-    assert profile.device_id() == "cli.from-auth"
+def test_identity_is_stable_and_ha_shaped(profile: Profile):
+    identity = profile.identity("cn")
+    # 形态必须和 Home Assistant 一致，否则换 token 会被判 96002
+    assert identity.device_id.startswith("ha.")
+    assert len(identity.device_id) == 35
+    assert identity.webhook_id.isdigit()
+    assert identity.redirect_url == (
+        f"http://homeassistant.local:8123/api/webhook/{identity.webhook_id}"
+    )
+    # 同一个 profile 反复取要稳定，否则重试时参数对不上
+    again = profile.identity("cn")
+    assert (again.device_id, again.redirect_url) == (
+        identity.device_id,
+        identity.redirect_url,
+    )
+
+
+def test_identity_differs_per_region(profile: Profile):
+    assert profile.identity("cn").device_id != profile.identity("sg").device_id
+    # webhook_id 不随区域变
+    assert profile.identity("cn").webhook_id == profile.identity("sg").webhook_id
+
+
+def test_pending_login_roundtrip(profile: Profile):
+    assert profile.read_pending() is None
+    profile.write_pending({"state": "s1", "region": "cn"})
+    assert profile.read_pending()["state"] == "s1"
+    assert file_is_private(profile.pending_path)
+    profile.clear_pending()
+    assert profile.read_pending() is None
 
 
 def test_clear_and_purge(profile: Profile):

@@ -16,12 +16,20 @@ USER_PROFILE_URL = "https://open.account.xiaomi.com/user/profile"
 #     都会返回 "invalid redirect uri"；
 #   * scheme（http/https）与 path、query 不校验，可以自定义。
 # 因此这里的 host 不可更改，只有路径是我们自己的。
+# 换 token 时服务端还会拿 code 绑定的信息做二次比对，实测用自定义路径
+# （/mi-home-cli/callback）+ 自定义 device_id（cli.xxx）会被判 96002
+# invalid request，所以回调路径和 device_id 都照 Home Assistant 的形态来：
+#   redirect_uri = http://homeassistant.local:8123/api/webhook/{webhook_id}
+#   device_id    = ha.{32 位 hex}
 REDIRECT_HOST = "homeassistant.local"
 REDIRECT_PORT = 8123
-DEFAULT_REDIRECT_PATH = "/mi-home-cli/callback"
-DEFAULT_REDIRECT_URL = (
-    f"http://{REDIRECT_HOST}:{REDIRECT_PORT}{DEFAULT_REDIRECT_PATH}"
-)
+REDIRECT_PATH_PREFIX = "/api/webhook/"
+REDIRECT_ORIGIN = f"http://{REDIRECT_HOST}:{REDIRECT_PORT}"
+DEVICE_ID_PREFIX = "ha."
+
+
+def redirect_url(webhook_id: str) -> str:
+    return f"{REDIRECT_ORIGIN}{REDIRECT_PATH_PREFIX}{webhook_id}"
 
 DEFAULT_API_HOST = "ha.api.io.mi.com"
 

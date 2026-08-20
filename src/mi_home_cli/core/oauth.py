@@ -9,11 +9,12 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import secrets
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlencode
 
 import httpx
@@ -48,6 +49,15 @@ class TokenResult:
 
 def new_state() -> str:
     return secrets.token_hex(16)
+
+
+def state_for_device(device_id: str) -> str:
+    """按 Home Assistant 米家集成的算法生成 state。
+
+    state 本身只用于校验回调是不是本次登录发起的，小米不会在换 token 时再要
+    它；这里保持同样的算法，纯粹是为了把「和 HA 不一致」这个变量从排查里去掉。
+    """
+    return hashlib.sha1(f"d={device_id}".encode("utf-8")).hexdigest()
 
 
 def build_auth_url(
@@ -101,6 +111,11 @@ def _unwrap_error(res_obj: dict[str, Any]) -> CloudError:
     hint = None
     if inner == 96013:
         hint = "授权码无效或已被用过，重新执行 `mi auth login`"
+    elif inner == 96002:
+        hint = (
+            "换 token 的参数和授权时不一致（redirect_uri / client_id / "
+            "device_id 三者必须完全相同），用 -v 看实际发出的请求"
+        )
     elif code == 401 or inner == 401:
         hint = "凭据已失效，重新执行 `mi auth login`"
     text = f"获取 token 失败（code={code}"
@@ -117,13 +132,15 @@ class OAuthClient:
         self,
         region: str = const.DEFAULT_REGION,
         *,
-        redirect_url: str = const.DEFAULT_REDIRECT_URL,
+        redirect_url: str,
         timeout: float = const.HTTP_TIMEOUT,
         client: httpx.Client | None = None,
+        trace: Callable[[str], None] | None = None,
     ) -> None:
         self.region = region
         self.redirect_url = redirect_url
         self._timeout = timeout
+        self._trace = trace
         self._client = client or httpx.Client(
             timeout=timeout, headers={"User-Agent": const.USER_AGENT}
         )
@@ -141,8 +158,15 @@ class OAuthClient:
 
     def _get_token(self, data: dict[str, Any]) -> TokenResult:
         url = f"{const.api_base_url(self.region)}/app/v2/ha/oauth/get_token"
+        payload = json.dumps(data)
+        if self._trace:
+            self._trace(f"GET {url}?data={payload}")
         try:
-            response = self._client.get(url, params={"data": json.dumps(data)})
+            response = self._client.get(
+                url,
+                params={"data": payload},
+                headers={"content-type": "application/x-www-form-urlencoded"},
+            )
         except httpx.HTTPError as err:
             raise NetworkError(f"连接 {url} 失败：{err}") from err
         if response.status_code == 401:
@@ -156,6 +180,8 @@ class OAuthClient:
                 f"获取 token 失败：HTTP {response.status_code}",
                 code=response.status_code,
             )
+        if self._trace:
+            self._trace(f"<- HTTP {response.status_code} {response.text[:500]}")
         try:
             res_obj = response.json()
         except ValueError as err:

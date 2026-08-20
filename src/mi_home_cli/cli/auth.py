@@ -21,7 +21,7 @@ from ..core.callback import (
     port_available,
     resolve_redirect_host,
 )
-from ..core.oauth import OAuthClient, build_auth_url, new_state
+from ..core.oauth import OAuthClient, build_auth_url, state_for_device
 from ..errors import MiCliError, NotAuthenticated, UsageError
 from ..render import OutputFormat, mask
 from ..store import Profile, config_dir, list_profiles, read_config, write_config
@@ -137,7 +137,13 @@ def login(
     ] = False,
     redirect_url: Annotated[
         Optional[str],
-        typer.Option("--redirect-url", help="自定义 redirect_uri（host 必须是 homeassistant.local:8123）"),
+        typer.Option(
+            "--redirect-url",
+            help="自定义 redirect_uri（host 必须是 homeassistant.local:8123）",
+        ),
+    ] = None,
+    device_id: Annotated[
+        Optional[str], typer.Option("--device-id", help="自定义 device_id（排查用）")
     ] = None,
     wait: Annotated[
         float, typer.Option("--wait", help="等待授权的秒数")
@@ -155,19 +161,31 @@ def login(
         )
 
     profile = app_ctx.profile
-    redirect = redirect_url or const.DEFAULT_REDIRECT_URL
-    if f"{const.REDIRECT_HOST}:{const.REDIRECT_PORT}" not in redirect:
+    identity = profile.identity(region)
+    redirect = redirect_url or identity.redirect_url
+    if not redirect.startswith(const.REDIRECT_ORIGIN):
         render.warn(
             f"redirect_uri 的 host 不是 {const.REDIRECT_HOST}:{const.REDIRECT_PORT}，"
             "小米服务端会拒绝（invalid redirect uri）"
         )
-    device_id = profile.device_id()
-    state = new_state()
+    device_id = device_id or identity.device_id
+    # state 用 HA 的算法，纯粹是为了少一个和上游不一致的变量。
+    state = state_for_device(device_id)
     auth_url = build_auth_url(
         redirect_url=redirect,
         device_id=device_id,
         state=state,
         skip_confirm=skip_confirm,
+    )
+    # 先落盘，换 token 失败时还能用 `mi auth exchange` 拿同一个 code 重试。
+    profile.write_pending(
+        {
+            "region": region,
+            "device_id": device_id,
+            "redirect_url": redirect,
+            "state": state,
+            "created_at": int(time.time()),
+        }
     )
 
     result_queue: "queue.Queue[object]" = queue.Queue()
@@ -220,8 +238,38 @@ def login(
         f"拿到授权码（来自{'本地回调' if result.source == 'server' else '粘贴'}），"
         "正在换取 token…"
     )
-    with OAuthClient(region, redirect_url=redirect, timeout=app_ctx.timeout) as client:
-        token = client.exchange_code(result.code, device_id)
+    try:
+        _exchange_and_save(
+            app_ctx,
+            region=region,
+            redirect=redirect,
+            device_id=device_id,
+            code=result.code,
+        )
+    except MiCliError as err:
+        # 换 token 失败时授权码通常还没被消耗，别让用户白跑一遍浏览器。
+        render.error(err.message)
+        if err.hint:
+            render.info(f"[dim]提示：{err.hint}[/dim]")
+        render.info("授权码还在有效期内的话可以直接重试：")
+        render.raw(f"  mi -v auth exchange {result.code}")
+        raise typer.Exit(code=err.exit_code) from err
+
+
+def _exchange_and_save(
+    app_ctx: AppContext, *, region: str, redirect: str, device_id: str, code: str
+) -> None:
+    """用授权码换 token 并落盘。
+
+    授权、换 token 两步里的 client_id / redirect_uri / device_id 必须完全一致，
+    否则服务端返回 96002 invalid request。
+    """
+    profile = app_ctx.profile
+    trace = render.raw if app_ctx.verbose else None
+    with OAuthClient(
+        region, redirect_url=redirect, timeout=app_ctx.timeout, trace=trace
+    ) as client:
+        token = client.exchange_code(code, device_id)
         auth = token.to_auth(region, device_id)
         try:
             info = client.user_profile(token.access_token)
@@ -231,12 +279,47 @@ def login(
             render.warn(f"账号信息获取失败（不影响登录）：{err.message}")
 
     profile.write_auth(auth)
+    profile.clear_pending()
     render.success(
         f"登录成功：{auth.nickname or '未知昵称'}"
         f"（uid {auth.uid or '未知'}，区域 {region}，profile {profile.name}）"
     )
     render.info(f"凭据已保存到 {profile.auth_path}（权限 0600）")
-    render.info(f"有效期约 {_fmt_duration(auth.expires_at - time.time())}，到期前会自动续期")
+    render.info(
+        f"有效期约 {_fmt_duration(auth.expires_at - time.time())}，到期前会自动续期"
+    )
+
+
+@app.command()
+def exchange(
+    ctx: typer.Context,
+    code_or_url: Annotated[
+        str, typer.Argument(help="授权码，或浏览器回调地址（整段粘贴）")
+    ],
+) -> None:
+    """用授权码换 token。
+
+    登录时换 token 那一步失败（比如网络抖动）而授权码还没过期时，可以用这个
+    命令重试，不必再走一遍浏览器；参数取自上一次 `mi auth login` 的记录。
+    """
+    app_ctx = _ctx(ctx)
+    profile = app_ctx.profile
+    pending = profile.read_pending()
+    if not pending:
+        raise UsageError(
+            "没有找到上一次登录的记录，先执行 `mi auth login`",
+        )
+    result = parse_pasted(code_or_url, expected_state=pending.get("state"))
+    age = int(time.time()) - int(pending.get("created_at", 0))
+    if age > 600:
+        render.warn(f"上一次登录是 {age // 60} 分钟前发起的，授权码可能已过期")
+    _exchange_and_save(
+        app_ctx,
+        region=pending["region"],
+        redirect=pending["redirect_url"],
+        device_id=pending["device_id"],
+        code=result.code,
+    )
 
 
 def _drain(

@@ -4,8 +4,10 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import secrets
 import stat
 import time
 import uuid
@@ -13,6 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .core import const
 from .core.const import DEFAULT_REGION, TOKEN_REFRESH_RATIO
 from .errors import MiCliError, NotAuthenticated
 
@@ -122,6 +125,20 @@ class AuthData:
 
 
 @dataclass
+class Identity:
+    """一次登录里必须前后一致的三个值。
+
+    授权时用什么，换 token 时就得用什么，服务端会比对；对不上会返回
+    96002 invalid request。
+    """
+
+    install_id: str
+    webhook_id: str
+    device_id: str
+    redirect_url: str
+
+
+@dataclass
 class Profile:
     """一个账号/区域配置。"""
 
@@ -171,22 +188,50 @@ class Profile:
         if self.path.exists():
             shutil.rmtree(self.path)
 
-    def device_id(self) -> str:
-        """本机在小米 OAuth 侧的设备标识，首次使用时生成并固定下来。
+    @property
+    def identity_path(self) -> Path:
+        return self.path / "identity.json"
 
-        换 device_id 不影响登录，但会让小米侧多出一条设备记录，所以持久化。
+    @property
+    def pending_path(self) -> Path:
+        return self.path / "pending.json"
+
+    def identity(self, region: str) -> "Identity":
+        """本机在小米 OAuth 侧的身份，首次使用时生成并固定下来。
+
+        形态照抄 Home Assistant 米家集成：webhook_id 是随机 64 位整数，
+        device_id 是 `ha.` 加 32 位 hex。换 device_id 不影响能否登录，但会在
+        小米侧多出一条设备记录，所以持久化。
         """
-        auth = self.read_auth()
-        if auth and auth.device_id:
-            return auth.device_id
-        marker = self.path / "device_id"
-        if marker.exists():
-            return marker.read_text(encoding="utf-8").strip()
-        device_id = f"cli.{uuid.uuid4().hex}"
-        self.path.mkdir(parents=True, exist_ok=True)
-        os.chmod(self.path, 0o700)
-        marker.write_text(device_id + "\n", encoding="utf-8")
-        return device_id
+        data = _read_json(self.identity_path) or {}
+        install_id = data.get("install_id") or uuid.uuid4().hex
+        webhook_id = data.get("webhook_id") or str(secrets.randbits(64))
+        if data.get("install_id") != install_id or data.get(
+            "webhook_id"
+        ) != webhook_id:
+            _write_private_json(
+                self.identity_path,
+                {"install_id": install_id, "webhook_id": webhook_id},
+            )
+        digest = hashlib.sha256(
+            f"{install_id}.{webhook_id}.{region}".encode("utf-8")
+        ).hexdigest()[:32]
+        return Identity(
+            install_id=install_id,
+            webhook_id=webhook_id,
+            device_id=f"{const.DEVICE_ID_PREFIX}{digest}",
+            redirect_url=const.redirect_url(webhook_id),
+        )
+
+    def write_pending(self, data: dict[str, Any]) -> None:
+        """记下这次登录用的参数，好让 `mi auth exchange` 用同样的参数重试。"""
+        _write_private_json(self.pending_path, data)
+
+    def read_pending(self) -> dict[str, Any] | None:
+        return _read_json(self.pending_path)
+
+    def clear_pending(self) -> None:
+        self.pending_path.unlink(missing_ok=True)
 
 
 def list_profiles(root: Path | None = None) -> list[str]:

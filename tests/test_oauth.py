@@ -5,14 +5,22 @@ import httpx
 import pytest
 
 from mi_home_cli.core import const
-from mi_home_cli.core.oauth import OAuthClient, build_auth_url, new_state
+from mi_home_cli.core.oauth import (
+    OAuthClient,
+    build_auth_url,
+    new_state,
+    state_for_device,
+)
 from mi_home_cli.errors import CloudError, NetworkError
+
+
+REDIRECT = const.redirect_url("1234567890")
 
 
 def test_auth_url_contains_required_params():
     url = build_auth_url(
-        redirect_url=const.DEFAULT_REDIRECT_URL,
-        device_id="cli.abc",
+        redirect_url=REDIRECT,
+        device_id="ha.abc",
         state="s1",
     )
     parsed = urlparse(url)
@@ -20,14 +28,22 @@ def test_auth_url_contains_required_params():
     assert parsed.netloc == "account.xiaomi.com"
     assert params["client_id"] == [const.CLIENT_ID]
     assert params["response_type"] == ["code"]
-    assert params["device_id"] == ["cli.abc"]
+    assert params["device_id"] == ["ha.abc"]
     assert params["state"] == ["s1"]
     assert params["skip_confirm"] == ["false"]
-    # host 必须是白名单里的那个，换了小米会拒
+    # host 必须是白名单里的那个，换了小米会拒；路径也要照 HA 的形态
     assert params["redirect_uri"] == [
         f"http://{const.REDIRECT_HOST}:{const.REDIRECT_PORT}"
-        f"{const.DEFAULT_REDIRECT_PATH}"
+        f"/api/webhook/1234567890"
     ]
+
+
+def test_state_matches_home_assistant_algorithm():
+    # 和上游 miot_cloud.MIoTOauthClient 一致：sha1("d=" + device_id)
+    assert state_for_device("ha.abc") == (
+        "4308453a1cae61de9a1359eaf4364cf22bd2cd17"
+    )
+    assert len(state_for_device("ha.abc")) == 40
 
 
 def test_state_is_random():
@@ -55,12 +71,12 @@ def test_exchange_code_success():
             },
         )
 
-    with OAuthClient("cn", client=_client(handler)) as client:
-        token = client.exchange_code("the-code", "cli.abc")
+    with OAuthClient("cn", redirect_url=REDIRECT, client=_client(handler)) as client:
+        token = client.exchange_code("the-code", "ha.abc")
     assert token.access_token == "AT"
     assert token.expires_in == 3600
 
-    auth = token.to_auth("cn", "cli.abc")
+    auth = token.to_auth("cn", "ha.abc")
     # 有效期用掉 70% 就该刷新
     assert auth.refresh_at == auth.obtained_at + 2520
     assert not auth.needs_refresh
@@ -86,9 +102,9 @@ def test_exchange_code_invalid_code_message():
             },
         )
 
-    with OAuthClient("cn", client=_client(handler)) as client:
+    with OAuthClient("cn", redirect_url=REDIRECT, client=_client(handler)) as client:
         with pytest.raises(CloudError) as excinfo:
-            client.exchange_code("bad", "cli.abc")
+            client.exchange_code("bad", "ha.abc")
     assert "invalid authorization code" in str(excinfo.value)
     assert excinfo.value.exit_code == 9
     assert excinfo.value.hint is not None
@@ -98,7 +114,7 @@ def test_unauthorized_is_cloud_error():
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(401, text="nope")
 
-    with OAuthClient("cn", client=_client(handler)) as client:
+    with OAuthClient("cn", redirect_url=REDIRECT, client=_client(handler)) as client:
         with pytest.raises(CloudError):
             client.refresh("RT")
 
@@ -107,7 +123,7 @@ def test_network_failure_maps_to_network_error():
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("boom")
 
-    with OAuthClient("cn", client=_client(handler)) as client:
+    with OAuthClient("cn", redirect_url=REDIRECT, client=_client(handler)) as client:
         with pytest.raises(NetworkError) as excinfo:
             client.refresh("RT")
     assert excinfo.value.exit_code == 8

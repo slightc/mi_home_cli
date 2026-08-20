@@ -58,7 +58,10 @@ class Session:
         if not force and not auth.needs_refresh:
             return auth
         with OAuthClient(
-            auth.region, timeout=self._timeout, client=self._client
+            auth.region,
+            redirect_url=self.profile.identity(auth.region).redirect_url,
+            timeout=self._timeout,
+            client=self._client,
         ) as client:
             token = client.refresh(auth.refresh_token)
         refreshed = token.to_auth(
@@ -133,6 +136,9 @@ class Session:
 
     def user_profile(self) -> dict[str, Any]:
         with OAuthClient(
-            self.region, timeout=self._timeout, client=self._client
+            self.region,
+            redirect_url=self.profile.identity(self.region).redirect_url,
+            timeout=self._timeout,
+            client=self._client,
         ) as client:
             return client.user_profile(self.access_token())

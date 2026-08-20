@@ -158,9 +158,27 @@ HA 再拼上自己的 webhook 路径，最终是
 | `http://localhost:8123/x` | `invalid redirect uri` ❌ |
 | `http://127.0.0.1:9527` | `invalid redirect uri` ❌ |
 
-**结论：host 必须是 `homeassistant.local:8123`；scheme 与 path、query 不校验。**
-所以 CLI 用 `http://homeassistant.local:8123/mi-home-cli/callback`，
-路径上带自己的标识，避免和真的 HA webhook 混淆。
+**授权这一步的结论：host 必须是 `homeassistant.local:8123`；scheme 与 path、
+query 不校验。**
+
+但**换 token 那一步还会再比对一次**。用自定义路径
+（`/mi-home-cli/callback`）和自定义 `device_id`（`cli.xxx`）拿到的真实授权码，
+换 token 时返回 `96002 invalid request`；用假授权码测同样的参数却是
+`96013 invalid authorization code`——说明服务端先查授权码，查到之后才校验
+绑定信息，所以 96002 是「码本身有效、但参数不符合预期」。
+
+因此身份三件套完全照 Home Assistant 的形态生成：
+
+| 项 | 值 |
+| --- | --- |
+| `redirect_uri` | `http://homeassistant.local:8123/api/webhook/{webhook_id}`，`webhook_id` = 随机 64 位整数 |
+| `device_id` | `ha.` + 32 位 hex（`sha256(install_id.webhook_id.region)[:32]`） |
+| `state` | `sha1("d=" + device_id)`，与上游同算法 |
+
+这三个值按 profile 持久化在 `identity.json` 里；授权与换 token 必须用同一套，
+所以每次 `mi auth login` 会把它们连同 `state` 写进 `pending.json`，
+换 token 万一失败可以用 `mi auth exchange <code>` 拿同一个授权码重试，
+不必再走一遍浏览器。
 
 于是要自动收到 code，得同时满足两件事：浏览器把 `homeassistant.local` 解析到
 跑 CLI 的机器，且该机器的 8123 端口由我们监听。实现按下面的顺序尽力而为，
@@ -175,8 +193,10 @@ HA 再拼上自己的 webhook 路径，最终是
    `?code=...&state=...`，让用户整段粘回终端。本地服务和粘贴同时等待，
    谁先到用谁；`--manual` 只走粘贴。
 
-安全上：`state` 每次登录随机生成，本地回调的 `state` 必须完全匹配才接受
-（不匹配就是别人往这个端口打的请求）；粘贴内容缺 `state` 时给出警告。
+安全上：本地回调的 `state` 必须完全匹配才接受（不匹配就是别人往这个端口打的
+请求）；粘贴内容缺 `state` 时给出警告。`state` 由 `device_id` 推导而来
+（与上游同算法），不是每次随机——回调只在本机短暂监听，这点取舍换来的是
+和上游完全一致的参数，少一个排查变量。
 
 token 到期前（用掉 70% 有效期）自动续期；续期失败则提示重新 `mi auth login`，
 退出码 `10`。

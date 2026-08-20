@@ -26,6 +26,7 @@
 mi auth login [--region cn] [--manual] [--no-browser] [--no-mdns]
               [--redirect-url URL] [--wait 300] [--skip-confirm]
 mi auth status [--check]       # 登录状态、uid、昵称、token 剩余有效期
+mi auth exchange <code|URL>    # 用授权码换 token（换取失败时拿同一个码重试）
 mi auth refresh                # 手动刷新 access_token
 mi auth logout [--purge]       # 退出；--purge 连同设备缓存一起删
 mi auth whoami                 # 打印当前账号信息（实时查询）
@@ -40,6 +41,11 @@ mi profile list|use|remove|path
 - `--manual`：不监听端口，只走粘贴。
 - `--no-mdns`：不广播 mDNS（局域网里有真的 Home Assistant 时用）。
 - `--wait`：等待授权的秒数，默认 300。
+- `--device-id`：覆盖 `device_id`（排查用；默认按 HA 的形态生成）。
+
+授权和换 token 两步里的 `client_id` / `redirect_uri` / `device_id` 必须完全一致，
+否则服务端返回 `96002 invalid request`，所以这三个值按 profile 固定下来。
+加 `-v` 可以看到换 token 时实际发出的请求。
 
 ## 2. 家庭 / 房间 / 设备
 
