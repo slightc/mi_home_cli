@@ -316,8 +316,10 @@ CLI 只拿到一个 3 天有效期、可撤销的 token；换成账号密码就�
 spec 里带 `camera-stream-for-google-home` / `camera-stream-for-amazon-alexa` 服务，
 `start-hls-stream` / `start-rtsp-stream` 是普通的 spec 动作，OAuth2 就能调，
 `mi action <设备> start-rtsp-stream` 直接可用，返回的地址会带上属性名。
-没有这两个服务的型号（如 `chuangmi.camera.039c01`）则只有 `p2p-stream`，
-那是小米私有的 cs2 协议，不在 miot-spec 的数据面里。
+没有这两个服务的型号（如 `chuangmi.camera.039c01`、`chuangmi.camera.079ac1`）
+则只有 `p2p-stream`，那是小米私有的 cs2 协议，不在 miot-spec 的数据面里。
+支不支持是按 SKU 定的，同一款产品的不同 SKU 可能一个有一个没有——完整名单和
+扫描脚本见 [camera-stream.md](camera-stream.md)。
 
 ## 7. 测试策略
 
