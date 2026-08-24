@@ -1,0 +1,57 @@
+name: Publish to PyPI
+
+# Publishes the package to PyPI whenever a GitHub Release is published.
+# Uses PyPI Trusted Publishing (OIDC) — no API token or secret to manage.
+#
+# One-time setup on PyPI (https://pypi.org/manage/account/publishing/):
+#   PyPI project name: mi-home-cli
+#   Owner:             slightc
+#   Repository name:   mi_home_cli
+#   Workflow name:     publish.yml
+#   Environment name:  pypi
+# Then create a GitHub Release (tag e.g. v0.1.0) to trigger a publish.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/mi-home-cli/
+    permissions:
+      id-token: write  # required for OIDC trusted publishing
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1

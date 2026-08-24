@@ -5,11 +5,36 @@ build-backend = "hatchling.build"
 [project]
 name = "mi-home-cli"
 version = "0.1.0"
-description = "命令行控制米家（Xiaomi Home）设备"
+description = "Command-line control for Xiaomi Home (MIoT) devices — 命令行控制米家设备"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
+authors = [{ name = "slightc" }]
+keywords = [
+    "xiaomi",
+    "mihome",
+    "mi-home",
+    "miot",
+    "smart-home",
+    "home-automation",
+    "cli",
+    "iot",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Home Automation",
+    "Topic :: Utilities",
+]
 dependencies = [
     "httpx>=0.27",
     "typer>=0.12",
@@ -17,6 +42,11 @@ dependencies = [
     "paho-mqtt>=2.1.0",
     "cryptography>=50.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/slightc/mi_home_cli"
+Repository = "https://github.com/slightc/mi_home_cli"
+Issues = "https://github.com/slightc/mi_home_cli/issues"
 
 [project.optional-dependencies]
 # 可选的运行时增强：登录时自动广播 mDNS，提高回调命中率。
