@@ -41,7 +41,29 @@ is not affiliated with Xiaomi.
 
 ## Install
 
-Dependencies are managed with [uv](https://docs.astral.sh/uv/).
+Requires Python 3.11+. Install from PyPI with [uv](https://docs.astral.sh/uv/) or
+pipx for a global `mi` command in one line:
+
+```bash
+uv tool install --with zeroconf mi-home-cli   # recommended
+# or
+pipx install mi-home-cli
+# or
+pip install mi-home-cli
+```
+
+`--with zeroconf` (with pipx: `pipx install "mi-home-cli[mdns]"`) is the optional mdns
+enhancement — it improves the success rate of automatically receiving the login
+callback.
+
+Then:
+
+```bash
+mi --help
+```
+
+<details>
+<summary><b>From source (development, or to hack on it)</b></summary>
 
 ```bash
 git clone https://github.com/slightc/mi_home_cli && cd mi_home_cli
@@ -50,29 +72,26 @@ uv sync --extra mdns      # mdns is optional; it improves the success rate of
 uv run mi --help
 ```
 
-For a global `mi` command:
-
-```bash
-uv tool install --with zeroconf .
-```
-
-Requires Python 3.11+.
+When running from source, replace `mi` with `uv run mi` below.
+</details>
 
 ## Quick start
 
 ```bash
-uv run mi doctor          # health check first: ports, DNS, network, certs, clock
-uv run mi auth login      # log into your Xiaomi account in the browser
-uv run mi device sync     # pull homes, rooms, and the device list
-uv run mi device list
+mi doctor          # health check first: ports, DNS, network, certs, clock
+mi auth login      # log into your Xiaomi account in the browser
+mi device sync     # pull homes, rooms, and the device list
+mi device list
 
-uv run mi home use Home   # with multiple homes, setting a default is strongly advised
-uv run mi device alias set "Mijia Air Purifier 6" purifier
+mi home use Home   # with multiple homes, setting a default is strongly advised
+mi device alias set "Mijia Air Purifier 6" purifier
 
-uv run mi get purifier    # read every readable property
-uv run mi set purifier mode=sleep
-uv run mi fan purifier --speed 2
+mi get purifier    # read every readable property
+mi set purifier mode=sleep
+mi fan purifier --speed 2
 ```
+
+> Running from source (not installed from PyPI)? Replace `mi` with `uv run mi`.
 
 ### About login
 
