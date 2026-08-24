@@ -34,7 +34,28 @@ Home Assistant 集成）独立实现，**不包含其任何源码或资源文件
 
 ## 安装
 
-依赖用 [uv](https://docs.astral.sh/uv/) 管理。
+需要 Python 3.11+。推荐用 [uv](https://docs.astral.sh/uv/) 或 pipx 从 PyPI 装，
+一行装好全局 `mi` 命令：
+
+```bash
+uv tool install --with zeroconf mi-home-cli   # 推荐
+# 或
+pipx install mi-home-cli
+# 或
+pip install mi-home-cli
+```
+
+`--with zeroconf`（pipx 用 `pipx install "mi-home-cli[mdns]"`）是可选的 mdns 增强，
+能提高登录时自动接收回调的成功率。
+
+装好后：
+
+```bash
+mi --help
+```
+
+<details>
+<summary><b>从源码安装（开发或想改代码）</b></summary>
 
 ```bash
 git clone https://github.com/slightc/mi_home_cli && cd mi_home_cli
@@ -42,29 +63,26 @@ uv sync --extra mdns      # mdns 是可选依赖，能提高登录时自动接�
 uv run mi --help
 ```
 
-想要全局可用的 `mi` 命令：
-
-```bash
-uv tool install --with zeroconf .
-```
-
-需要 Python 3.11+。
+从源码跑时把下文的 `mi` 换成 `uv run mi`。
+</details>
 
 ## 快速开始
 
 ```bash
-uv run mi doctor          # 先体检：端口、域名解析、网络、证书、时钟
-uv run mi auth login      # 浏览器登录小米账号
-uv run mi device sync     # 拉取家庭、房间、设备清单
-uv run mi device list
+mi doctor          # 先体检：端口、域名解析、网络、证书、时钟
+mi auth login      # 浏览器登录小米账号
+mi device sync     # 拉取家庭、房间、设备清单
+mi device list
 
-uv run mi home use 我家    # 多个家庭时强烈建议设一个默认家庭
-uv run mi device alias set "米家空气净化器 6" 净化器
+mi home use 我家    # 多个家庭时强烈建议设一个默认家庭
+mi device alias set "米家空气净化器 6" 净化器
 
-uv run mi get 净化器       # 读所有可读属性
-uv run mi set 净化器 mode=睡眠
-uv run mi fan 净化器 --speed 2
+mi get 净化器       # 读所有可读属性
+mi set 净化器 mode=睡眠
+mi fan 净化器 --speed 2
 ```
+
+> 从源码跑（未装到 PyPI）就把 `mi` 换成 `uv run mi`。
 
 ### 关于登录
 

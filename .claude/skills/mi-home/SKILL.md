@@ -5,7 +5,20 @@ description: 用本仓库的 mi 命令行工具控制米家（Xiaomi Home）智�
 
 # 用 mi 控制米家设备
 
-`mi` 是本仓库提供的命令行工具，走小米云端 OAuth2 接口操作真实设备。
+`mi` 是控制米家设备的命令行工具，走小米云端 OAuth2 接口操作真实设备。
+
+## 确保 mi 可用
+
+先跑一下 `mi --help`。如果提示找不到命令：
+
+- **在本仓库里**：用 `uv run mi ...`（下文所有 `mi` 都可换成 `uv run mi`）。
+- **想要全局命令**：从 PyPI 装一次即可，之后直接用 `mi`：
+
+  ```bash
+  uv tool install --with zeroconf mi-home-cli   # 或 pipx install "mi-home-cli[mdns]"
+  ```
+
+`zeroconf`/`[mdns]` 是可选增强，能提高登录时自动接收回调的成功率。需要 Python 3.11+。
 
 ## 先确认能用
 
