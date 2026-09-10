@@ -137,7 +137,9 @@ mi get 台灯 brightness           # 裸名（该设备内唯一才行）
 
 ```bash
 mi home use 我家
-mi home use --clear      # 取消
+mi home select           # 交互式选一个（也能选取消）
+mi home unset            # 取消默认家庭
+mi home use --clear      # 同上，取消
 mi --all-homes ...       # 临时跨家庭
 ```
 
@@ -183,6 +185,8 @@ mi profile list|use|remove|path
 ```bash
 mi home list
 mi home use [<家庭>] [--clear]
+mi home select                 # 交互式选择默认家庭
+mi home unset                  # 取消默认家庭
 mi room list [--home 我家]
 mi device list [--home] [--room] [--model] [--search] [--online|--offline] [--wide]
 mi device show <设备>
