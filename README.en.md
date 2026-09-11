@@ -152,7 +152,9 @@ device resolution, `device list`, and `room list` only look at that home:
 
 ```bash
 mi home use Home
-mi home use --clear      # cancel
+mi home select           # pick one interactively (can also clear)
+mi home unset            # clear the default home
+mi home use --clear      # same, cancel
 mi --all-homes ...       # cross-home, one-off
 ```
 
@@ -199,6 +201,8 @@ mi profile list|use|remove|path
 ```bash
 mi home list
 mi home use [<home>] [--clear]
+mi home select                 # pick the default home interactively
+mi home unset                  # clear the default home
 mi room list [--home Home]
 mi device list [--home] [--room] [--model] [--search] [--online|--offline] [--wide]
 mi device show <device>

@@ -54,6 +54,8 @@ mi profile list|use|remove|path
 ```bash
 mi home list                                   # 家庭列表（含共享家庭），默认家庭标 *
 mi home use [<家庭>] [--clear]                 # 设置/查看/取消默认家庭
+mi home select                                 # 交互式选择默认家庭（可选取消）
+mi home unset                                  # 取消默认家庭，回到全部家庭
 mi room list [--home <家>]                     # 房间列表
 
 mi device list [--home H] [--room R] [--model M] [--online|--offline]

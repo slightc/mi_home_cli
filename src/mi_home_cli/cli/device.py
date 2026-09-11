@@ -332,3 +332,68 @@ def home_use(
     config["home"] = {"id": home["home_id"], "name": home["home_name"]}
     write_config(config, app_ctx.root)
     render.success(f"默认家庭已设为「{home['home_name']}」")
+
+
+def _clear_default_home(app_ctx: AppContext) -> bool:
+    """清掉配置里的默认家庭，返回之前是否设过。"""
+    config = read_config(app_ctx.root)
+    if config.pop("home", None) is None:
+        return False
+    write_config(config, app_ctx.root)
+    return True
+
+
+@home_app.command("unset")
+def home_unset(ctx: typer.Context) -> None:
+    """取消默认家庭，回到全部家庭（等同 `mi home use --clear`）。"""
+    app_ctx = _ctx(ctx)
+    if _clear_default_home(app_ctx):
+        render.success("已取消默认家庭，现在所有家庭的设备都可见")
+    else:
+        render.info("当前没有设默认家庭，所有家庭的设备都可见")
+
+
+@home_app.command("select")
+def home_select(ctx: typer.Context) -> None:
+    """交互式选择默认家庭（也可以选择取消默认家庭）。"""
+    app_ctx = _ctx(ctx)
+    homes = load_registry(app_ctx).homes
+    if not homes:
+        raise UsageError(
+            "没有可选的家庭", hint="先跑 `mi device sync` 从云端同步"
+        )
+    if not render.is_tty():
+        raise UsageError(
+            "select 需要交互式终端",
+            hint="脚本里请用 `mi home use <家庭>` 或 `mi home unset`",
+        )
+
+    default = app_ctx.default_home()
+    counts: dict[str, int] = {}
+    for device in load_registry(app_ctx).devices:
+        counts[device.home_id] = counts.get(device.home_id, 0) + 1
+
+    render.info("选择默认家庭：")
+    for index, home in enumerate(homes, start=1):
+        mark = " *" if default and default["id"] == home["home_id"] else ""
+        render.info(
+            f"  {index}. {home['home_name']}{mark}"
+            f"（{counts.get(home['home_id'], 0)} 台设备）"
+        )
+    render.info("  0. 取消默认家庭（所有家庭都可见）")
+
+    choice = typer.prompt("输入编号", type=int)
+    if choice == 0:
+        if _clear_default_home(app_ctx):
+            render.success("已取消默认家庭，现在所有家庭的设备都可见")
+        else:
+            render.info("当前没有设默认家庭，所有家庭的设备都可见")
+        return
+    if not 1 <= choice <= len(homes):
+        raise UsageError(f"编号 {choice} 超出范围（0–{len(homes)}）")
+
+    home = homes[choice - 1]
+    config = read_config(app_ctx.root)
+    config["home"] = {"id": home["home_id"], "name": home["home_name"]}
+    write_config(config, app_ctx.root)
+    render.success(f"默认家庭已设为「{home['home_name']}」")
