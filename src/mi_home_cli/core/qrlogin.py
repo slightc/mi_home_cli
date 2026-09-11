@@ -66,9 +66,14 @@ def _strip_prefix(text: str) -> str:
 def render_qr(data: str) -> str | None:
     """把内容渲染成终端二维码字符串。
 
-    用「黑字白底 + 半块字符」渲染：每个字符单元上下叠两个模块，高度减半；显式给
-    ANSI 黑前景白背景，保证暗模块在深色/浅色终端里都是暗的（不靠终端主题、也就
-    不会出现反色扫不出的情况）。
+    每个字符单元用「上半块 `▀`」叠两个纵向模块（高度减半，整体紧凑到能一屏放下，
+    这对能不能扫到很关键）：**上模块画成前景色、下模块交给背景色**。下半个模块由
+    背景色填充，会连同行间距的留白一起盖掉——这样在有 line-height 的终端里，半块
+    之间也不会裂出横条（旧写法用 `█▀▄` 三种字形，行距一大就发毛）。前景/背景显式
+    给黑与白，深色/浅色主题都不反色。0=亮（白），1=暗（黑）。
+
+    仍受限于终端字符格的宽高比：多数终端「高≈2×宽」，此时模块接近正方；个别接近
+    正方的字体/渲染器下模块会偏扁，但用背景色成块填充后至少干净、可扫。
 
     `segno` 是直接依赖，正常总能导入；万一被环境裁掉则返回 None，由调用方兜底。
     """
@@ -84,13 +89,19 @@ def render_qr(data: str) -> str | None:
     if len(matrix) % 2:  # 补一行全亮，好两两配对
         matrix.append([0] * len(matrix[0]))
 
-    black_on_white = "\x1b[30;47m"
     reset = "\x1b[0m"
-    glyph = {(1, 1): "█", (1, 0): "▀", (0, 1): "▄", (0, 0): " "}
     lines = []
     for top, bottom in zip(matrix[0::2], matrix[1::2]):
-        cells = "".join(glyph[(t, b)] for t, b in zip(top, bottom))
-        lines.append(f"{black_on_white}{cells}{reset}")
+        parts: list[str] = []
+        prev = None
+        for t, b in zip(top, bottom):
+            # 前景 = 上模块，背景 = 下模块；暗=黑(30/40)，亮=白(37/47)。
+            color = f"\x1b[{'30' if t else '37'};{'40' if b else '47'}m"
+            if color != prev:
+                parts.append(color)
+                prev = color
+            parts.append("▀")  # ▀ 上半块
+        lines.append("".join(parts) + reset)
     return "\n".join(lines)
 
 

@@ -244,11 +244,21 @@ def test_network_error_wrapped():
 
 def test_render_qr_returns_scannable_block():
     out = render_qr("https://example.com/scan")
-    # segno 在 dev 依赖里，应当能画出来
+    # segno 在依赖里，应当能画出来
     assert out is not None
-    # 半块字符 + 黑字白底 ANSI
-    assert "\x1b[30;47m" in out
-    assert any(ch in out for ch in "█▀▄")
+    # 上半块 ▀，前景=上模块 / 背景=下模块，黑白显式着色（不反色）
+    assert "▀" in out
+    # 暗模块用黑（30/40），亮模块用白（37/47），四种组合都可能出现
+    assert "\x1b[30;40m" in out or "\x1b[30;47m" in out
+    assert "\x1b[37;47m" in out or "\x1b[37;40m" in out
+    # 半块把高度折半：每行的可见模块列数 ≈ 行数 * 2（二维码是方阵）
+    import re
+
+    lines = out.splitlines()
+    cols = {len(re.sub(r"\x1b\[[0-9;]*m", "", ln)) for ln in lines}
+    assert len(cols) == 1  # 每行等宽
+    width = cols.pop()
+    assert abs(width - len(lines) * 2) <= 2
 
 
 def _deadline() -> float:
