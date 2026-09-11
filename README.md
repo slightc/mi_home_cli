@@ -108,6 +108,18 @@ mi auth login --scan
 调用复刻登录页的跳转流程（不引入无头浏览器），扫码拿到的授权码和浏览器登录
 完全一样。装好这个工具就能直接用，不需要额外装什么。
 
+终端二维码受字体和行距影响，个别终端里可能扫不出——不要紧，命令还会**一并打印
+一个二维码图片地址**，用浏览器打开那张图再扫即可，同一个二维码，不会卡住。
+
+扫码在小米账号「登录设备」里默认显示为 `mi-home-cli/版本`（不是一堆 Chrome），
+而且同一台机器反复扫码只算同一台设备。想换个显示名：
+
+```bash
+mi config set scan_device_name "Chen-MacBook"   # 或环境变量 MI_SCAN_DEVICE_NAME
+```
+
+（这个名字会作为 HTTP User-Agent 发送，只能用 ASCII，带不了中文。）
+
 ## 核心概念
 
 ### 设备怎么指
@@ -294,7 +306,8 @@ mi version
 | `--verify` | 写入后回读确认 |
 | `-v, --verbose` | 打印请求细节、走了哪条通道 |
 
-也支持环境变量 `MI_PROFILE` / `MI_REGION` / `MI_OUTPUT` / `MI_CHANNEL`。
+也支持环境变量 `MI_PROFILE` / `MI_REGION` / `MI_OUTPUT` / `MI_CHANNEL` /
+`MI_SCAN_DEVICE_NAME`。
 
 ```bash
 mi -o plain get 台灯 brightness        # 只输出 "60"，可以直接 $(...)
@@ -331,6 +344,7 @@ Claude Code 会自动加载，它会教 agent 怎么定位设备、查 spec、�
 └── profiles/<name>/
     ├── auth.json               # token（0600）
     ├── identity.json           # OAuth 用的 device_id、回调 id
+    ├── scan_device.json        # 扫码登录复用的 web deviceId，避免每次多登记一台设备
     ├── devices.json            # 设备清单缓存，含局域网 token（0600）
     ├── aliases.json            # 自定义别名
     ├── lan.json                # 局域网地址缓存

@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -66,11 +67,18 @@ def _strip_prefix(text: str) -> str:
 def render_qr(data: str) -> str | None:
     """把内容渲染成终端二维码字符串。
 
-    用「黑字白底 + 半块字符」渲染：每个字符单元上下叠两个模块，高度减半；显式给
-    ANSI 黑前景白背景，保证暗模块在深色/浅色终端里都是暗的（不靠终端主题、也就
-    不会出现反色扫不出的情况）。
+    每个字符单元用「上半块 `▀`」叠两个纵向模块（高度减半，整体紧凑到能一屏放下，
+    这对能不能扫到很关键）：**上模块画成前景色、下模块交给背景色**。下半个模块由
+    背景色填充，会连同行间距的留白一起盖掉——这样在有 line-height 的终端里，半块
+    之间也不会裂出横条（旧写法用 `█▀▄` 三种字形，行距一大就发毛）。前景/背景显式
+    给黑与白，深色/浅色主题都不反色。0=亮（白），1=暗（黑）。
 
-    `segno` 是直接依赖，正常总能导入；万一被环境裁掉则返回 None，由调用方兜底。
+    仍受限于终端字符格的宽高比：多数终端「高≈2×宽」，此时模块接近正方；个别接近
+    正方的字体/渲染器下模块会偏扁，但用背景色成块填充后至少干净、可扫。
+
+    内容太长导致二维码宽度超过终端列数时返回 None——宁可不画也不能让它换行折断
+    （折断的二维码根本扫不出）；由调用方退回到给链接。`segno` 是直接依赖，正常总能
+    导入；万一被环境裁掉也返回 None。
     """
     try:
         import segno
@@ -81,16 +89,26 @@ def render_qr(data: str) -> str | None:
     matrix = [list(row) for row in segno.make(data, error="m").matrix_iter(
         scale=1, border=4
     )]
+    # 每个模块占 1 列；超过终端宽度会换行折断，直接放弃让调用方给链接。
+    columns = shutil.get_terminal_size((80, 24)).columns
+    if len(matrix[0]) > columns:
+        return None
     if len(matrix) % 2:  # 补一行全亮，好两两配对
         matrix.append([0] * len(matrix[0]))
 
-    black_on_white = "\x1b[30;47m"
     reset = "\x1b[0m"
-    glyph = {(1, 1): "█", (1, 0): "▀", (0, 1): "▄", (0, 0): " "}
     lines = []
     for top, bottom in zip(matrix[0::2], matrix[1::2]):
-        cells = "".join(glyph[(t, b)] for t, b in zip(top, bottom))
-        lines.append(f"{black_on_white}{cells}{reset}")
+        parts: list[str] = []
+        prev = None
+        for t, b in zip(top, bottom):
+            # 前景 = 上模块，背景 = 下模块；暗=黑(30/40)，亮=白(37/47)。
+            color = f"\x1b[{'30' if t else '37'};{'40' if b else '47'}m"
+            if color != prev:
+                parts.append(color)
+                prev = color
+            parts.append("▀")  # ▀ 上半块
+        lines.append("".join(parts) + reset)
     return "\n".join(lines)
 
 
@@ -106,6 +124,8 @@ class QrLoginClient:
         redirect_url: str,
         device_id: str,
         state: str,
+        web_device_id: str | None = None,
+        user_agent: str | None = None,
         timeout: float = const.HTTP_TIMEOUT,
         client: httpx.Client | None = None,
         trace: Callable[[str], None] | None = None,
@@ -114,12 +134,22 @@ class QrLoginClient:
         self.device_id = device_id
         self.state = state
         self._trace = trace
+        # 小米「登录设备」里显示的名字是从这个 User-Agent 解析出来的，可自定义。
         self._client = client or httpx.Client(
             timeout=timeout,
             follow_redirects=False,
-            headers={"User-Agent": const.WEB_USER_AGENT},
+            headers={"User-Agent": user_agent or const.WEB_USER_AGENT},
         )
         self._owns_client = client is None
+        if web_device_id:
+            # 预置一个稳定的 web deviceId，服务端会原样沿用（实测 Set-Cookie 回显同值），
+            # 这样每次扫码在小米「登录设备」里都是同一台，不会越登记越多。
+            self._client.cookies.set(
+                "deviceId", web_device_id, domain=const.ACCOUNT_HOST, path="/"
+            )
+            self._client.cookies.set(
+                "pass_ua", "web", domain=const.ACCOUNT_HOST, path="/"
+            )
 
     def close(self) -> None:
         if self._owns_client:

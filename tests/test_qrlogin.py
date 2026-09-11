@@ -55,6 +55,74 @@ def _qr(handler) -> QrLoginClient:
     )
 
 
+def test_start_reuses_persistent_web_device_id():
+    """预置的 web deviceId 会作为 cookie 带上，让小米认成同一台设备。"""
+    seen_cookies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_cookies.append(request.headers.get("cookie", ""))
+        path = request.url.path
+        if path == "/oauth2/authorize":
+            return httpx.Response(
+                302, headers={"location": "https://account.xiaomi.com/pass/serviceLogin"}
+            )
+        if path == "/pass/serviceLogin":
+            return httpx.Response(200, json=SERVICE_LOGIN)
+        if path == "/longPolling/loginUrl":
+            return httpx.Response(200, json=LONG_POLLING)
+        raise AssertionError(path)
+
+    client = QrLoginClient(
+        redirect_url=REDIRECT,
+        device_id=DEVICE_ID,
+        state=STATE,
+        web_device_id="wb_fixed-device-123",
+        client=_client(handler),
+    )
+    with client:
+        client.start()
+    # serviceLogin / longPolling 这几跳都带上了固定的 deviceId
+    assert any("deviceId=wb_fixed-device-123" in c for c in seen_cookies)
+
+
+def test_default_user_agent_identifies_tool_not_browser():
+    # 默认设备名是工具名而不是浏览器（免得小米账号里冒出一堆 Chrome）
+    assert const.WEB_USER_AGENT.startswith("mi-home-cli/")
+    assert "Chrome" not in const.WEB_USER_AGENT
+
+
+def test_custom_user_agent_is_sent():
+    """自定义 user_agent 会作为 UA 头发出，决定小米显示的设备名。"""
+    seen_ua = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_ua.append(request.headers.get("user-agent", ""))
+        if request.url.path == "/oauth2/authorize":
+            return httpx.Response(
+                302, headers={"location": "https://account.xiaomi.com/pass/serviceLogin"}
+            )
+        if request.url.path == "/pass/serviceLogin":
+            return httpx.Response(200, json=SERVICE_LOGIN)
+        if request.url.path == "/longPolling/loginUrl":
+            return httpx.Response(200, json=LONG_POLLING)
+        raise AssertionError(request.url.path)
+
+    # 注入 client 时 UA 由测试自己设定，验证「按 UA 头发送」这条链路
+    client = QrLoginClient(
+        redirect_url=REDIRECT,
+        device_id=DEVICE_ID,
+        state=STATE,
+        client=httpx.Client(
+            transport=httpx.MockTransport(handler),
+            follow_redirects=False,
+            headers={"User-Agent": "MyLaptop"},
+        ),
+    )
+    with client:
+        client.start()
+    assert seen_ua and all(ua == "MyLaptop" for ua in seen_ua)
+
+
 def test_start_builds_challenge():
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -244,11 +312,40 @@ def test_network_error_wrapped():
 
 def test_render_qr_returns_scannable_block():
     out = render_qr("https://example.com/scan")
-    # segno 在 dev 依赖里，应当能画出来
+    # segno 在依赖里，应当能画出来
     assert out is not None
-    # 半块字符 + 黑字白底 ANSI
-    assert "\x1b[30;47m" in out
-    assert any(ch in out for ch in "█▀▄")
+    # 上半块 ▀，前景=上模块 / 背景=下模块，黑白显式着色（不反色）
+    assert "▀" in out
+    # 暗模块用黑（30/40），亮模块用白（37/47），四种组合都可能出现
+    assert "\x1b[30;40m" in out or "\x1b[30;47m" in out
+    assert "\x1b[37;47m" in out or "\x1b[37;40m" in out
+    # 半块把高度折半：每行的可见模块列数 ≈ 行数 * 2（二维码是方阵）
+    import re
+
+    lines = out.splitlines()
+    cols = {len(re.sub(r"\x1b\[[0-9;]*m", "", ln)) for ln in lines}
+    assert len(cols) == 1  # 每行等宽
+    width = cols.pop()
+    assert abs(width - len(lines) * 2) <= 2
+
+
+def test_render_qr_returns_none_when_too_wide(monkeypatch):
+    import os
+
+    # 终端只有 10 列，二维码宽度必然超出 → 宁可不画（否则换行折断扫不出）
+    monkeypatch.setattr(
+        "shutil.get_terminal_size", lambda fallback=(80, 24): os.terminal_size((10, 24))
+    )
+    assert render_qr("https://example.com/some/long/enough/scan/url") is None
+
+
+def test_render_qr_ok_when_wide_enough(monkeypatch):
+    import os
+
+    monkeypatch.setattr(
+        "shutil.get_terminal_size", lambda fallback=(80, 24): os.terminal_size((200, 50))
+    )
+    assert render_qr("https://example.com/scan") is not None
 
 
 def _deadline() -> float:

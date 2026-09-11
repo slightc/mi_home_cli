@@ -43,12 +43,19 @@ mi profile list|use|remove|path
 
 - `--scan`：扫码登录。在终端里画出二维码，用小米 App 扫码并在手机上确认即可，
   全程不需要浏览器、不需要粘贴。纯 API 调用复刻登录页的跳转流程（见
-  [design.md §3.3](./design.md)），不引入无头浏览器，装好即用。`--scan` 与
-  `--manual` / mDNS / 本地回调无关，设了它就只走扫码这一条路。
+  [design.md §3.3](./design.md)），不引入无头浏览器，装好即用。终端二维码受字体/
+  行距影响个别终端可能扫不出，命令会同时打印一个二维码图片地址（浏览器打开即见，
+  同一个二维码）兜底，不会卡死。`--scan` 与 `--manual` / mDNS / 本地回调无关，
+  设了它就只走扫码这一条路。
 - `--manual`：不监听端口，只走粘贴。
 - `--no-mdns`：不广播 mDNS（局域网里有真的 Home Assistant 时用）。
 - `--wait`：等待授权的秒数，默认 300（扫码时上限还受二维码有效期约束）。
 - `--device-id`：覆盖 `device_id`（排查用；默认按 HA 的形态生成）。
+
+扫码在小米账号「登录设备」里默认显示为 `mi-home-cli/版本`（同一台机器反复扫码复用
+同一 web deviceId，不会越登记越多）。显示名可改：`mi config set scan_device_name
+<名字>` 或环境变量 `MI_SCAN_DEVICE_NAME`——它会作为 HTTP User-Agent 发送，只能用
+ASCII。
 
 授权和换 token 两步里的 `client_id` / `redirect_uri` / `device_id` 必须完全一致，
 否则服务端返回 `96002 invalid request`，所以这三个值按 profile 固定下来。

@@ -19,11 +19,17 @@ ACCOUNT_HOST = "account.xiaomi.com"
 LONG_POLLING_URL = f"https://{ACCOUNT_HOST}/longPolling/loginUrl"
 # passport 的 JSON 响应有时带这个前缀，防 JSON 劫持，解析前要剥掉。
 XIAOMI_JSON_PREFIX = "&&&START&&&"
-# 账号页对不带浏览器 UA 的请求偶尔行为不同，扫码流程统一用一个浏览器 UA。
-WEB_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-)
+# 扫码登录请求的默认 User-Agent。小米「登录设备」里显示的名字就是从这个 UA 解析
+# 出来的——默认用工具名而不是浏览器 UA，免得账号里冒出一堆「Chrome」；用户可以用
+# `mi config set scan_device_name ...` 或环境变量 MI_SCAN_DEVICE_NAME 自定义。
+# （实测账号页对任意 UA 都能正常出二维码，不必伪装成浏览器。）
+def _default_web_user_agent() -> str:
+    from .. import __version__
+
+    return f"mi-home-cli/{__version__}"
+
+
+WEB_USER_AGENT = _default_web_user_agent()
 
 # 小米 OAuth 服务端对 redirect_uri 做白名单校验，实测结论：
 #   * host 必须是 homeassistant.local:8123，换端口或换成 localhost/127.0.0.1
