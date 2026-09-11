@@ -85,6 +85,44 @@ def test_start_reuses_persistent_web_device_id():
     assert any("deviceId=wb_fixed-device-123" in c for c in seen_cookies)
 
 
+def test_default_user_agent_identifies_tool_not_browser():
+    # 默认设备名是工具名而不是浏览器（免得小米账号里冒出一堆 Chrome）
+    assert const.WEB_USER_AGENT.startswith("mi-home-cli/")
+    assert "Chrome" not in const.WEB_USER_AGENT
+
+
+def test_custom_user_agent_is_sent():
+    """自定义 user_agent 会作为 UA 头发出，决定小米显示的设备名。"""
+    seen_ua = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_ua.append(request.headers.get("user-agent", ""))
+        if request.url.path == "/oauth2/authorize":
+            return httpx.Response(
+                302, headers={"location": "https://account.xiaomi.com/pass/serviceLogin"}
+            )
+        if request.url.path == "/pass/serviceLogin":
+            return httpx.Response(200, json=SERVICE_LOGIN)
+        if request.url.path == "/longPolling/loginUrl":
+            return httpx.Response(200, json=LONG_POLLING)
+        raise AssertionError(request.url.path)
+
+    # 注入 client 时 UA 由测试自己设定，验证「按 UA 头发送」这条链路
+    client = QrLoginClient(
+        redirect_url=REDIRECT,
+        device_id=DEVICE_ID,
+        state=STATE,
+        client=httpx.Client(
+            transport=httpx.MockTransport(handler),
+            follow_redirects=False,
+            headers={"User-Agent": "MyLaptop"},
+        ),
+    )
+    with client:
+        client.start()
+    assert seen_ua and all(ua == "MyLaptop" for ua in seen_ua)
+
+
 def test_start_builds_challenge():
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path

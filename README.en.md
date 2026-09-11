@@ -126,6 +126,16 @@ The terminal QR depends on your font and line spacing, so in a few terminals it 
 scan — that's fine: the command also **prints a QR image URL**. Open that image in a
 browser and scan it instead (same QR), so you're never stuck.
 
+In your Xiaomi account's "login devices" list this shows as `mi-home-cli/<version>`
+(not a pile of "Chrome" entries), and repeated scans on one machine count as the same
+device. To change the shown name:
+
+```bash
+mi config set scan_device_name "Chen-MacBook"   # or env var MI_SCAN_DEVICE_NAME
+```
+
+(The name is sent as the HTTP User-Agent, so it must be ASCII.)
+
 ## Core concepts
 
 ### How to refer to a device
@@ -316,8 +326,8 @@ Global options go before the subcommand (`-o` may also follow the subcommand):
 | `--verify` | read back after writing to confirm |
 | `-v, --verbose` | print request details and which channel was used |
 
-Environment variables `MI_PROFILE` / `MI_REGION` / `MI_OUTPUT` / `MI_CHANNEL` are also
-supported.
+Environment variables `MI_PROFILE` / `MI_REGION` / `MI_OUTPUT` / `MI_CHANNEL` /
+`MI_SCAN_DEVICE_NAME` are also supported.
 
 ```bash
 mi -o plain get lamp brightness        # prints just "60", drop it straight into $(...)

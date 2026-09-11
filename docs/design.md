@@ -264,6 +264,12 @@ token 到期前（用掉 70% 有效期）自动续期；续期失败则提示重
 `deviceId`（`scan_device.json`，形如 `wb_{uuid}`），每次扫码作为 cookie 带上——
 实测服务端会原样沿用（`Set-Cookie` 回显同值），小米于是认成同一台，不再新增。
 
+那台设备**显示成什么名字**取决于登录请求的 `User-Agent`（小米按 UA 解析）。默认
+用 `mi-home-cli/{版本}` 而不是浏览器 UA，免得账号里全是「Chrome」；可用
+`mi config set scan_device_name <名字>` 或环境变量 `MI_SCAN_DEVICE_NAME` 自定义。
+实测账号页对任意 UA 都能正常出二维码，不必伪装浏览器；但 UA 是 HTTP 头，只能
+ASCII，所以设备名不能带中文（设置时会校验拦下）。
+
 **首次授权的兜底**：小米对首次授权强制要求手动点一次「同意并关联」（OAuth 授权
 确认，浏览器登录也一样），`skip_confirm=true` 只能跳过**以后**已授权过的登录。若
 首次扫码因此拿不到 code 或换 token 失败，扫码流程会退回到给出**原始授权链接**

@@ -1,6 +1,7 @@
 """`mi auth` / `mi profile` 命令。"""
 from __future__ import annotations
 
+import os
 import queue
 import sys
 import threading
@@ -312,6 +313,28 @@ def _exchange_and_save(
 _SCAN_MAX_ATTEMPTS = 3
 
 
+def _scan_user_agent(app_ctx: AppContext) -> str:
+    """扫码登录用的 User-Agent，决定小米「登录设备」里显示的名字。
+
+    优先级：环境变量 MI_SCAN_DEVICE_NAME > 配置 scan_device_name > 默认工具名。
+    """
+    name = os.environ.get("MI_SCAN_DEVICE_NAME") or read_config(app_ctx.root).get(
+        "scan_device_name"
+    )
+    name = (name or "").strip() if isinstance(name, str) else ""
+    if not name:
+        return const.WEB_USER_AGENT
+    try:
+        name.encode("latin-1")
+    except UnicodeEncodeError:
+        # HTTP 头只能 Latin-1，带不了中文；回退默认，别让登录直接崩。
+        render.warn(
+            f"scan_device_name `{name}` 含非 ASCII 字符，无法作为设备名，已用默认名"
+        )
+        return const.WEB_USER_AGENT
+    return name
+
+
 def _scan_login(
     app_ctx: AppContext,
     *,
@@ -389,8 +412,10 @@ def _scan_capture_code(
         redirect_url=redirect,
         device_id=device_id,
         state=state,
-        # 固定的 web deviceId：避免每次扫码都在小米账号里多登记一台 Chrome。
+        # 固定的 web deviceId：避免每次扫码都在小米账号里多登记一台设备。
         web_device_id=app_ctx.profile.web_device_id(),
+        # 决定小米「登录设备」里显示的名字（默认工具名，可自定义）。
+        user_agent=_scan_user_agent(app_ctx),
         timeout=app_ctx.timeout,
         trace=trace,
     ) as client:

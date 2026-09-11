@@ -52,6 +52,11 @@ mi profile list|use|remove|path
 - `--wait`：等待授权的秒数，默认 300（扫码时上限还受二维码有效期约束）。
 - `--device-id`：覆盖 `device_id`（排查用；默认按 HA 的形态生成）。
 
+扫码在小米账号「登录设备」里默认显示为 `mi-home-cli/版本`（同一台机器反复扫码复用
+同一 web deviceId，不会越登记越多）。显示名可改：`mi config set scan_device_name
+<名字>` 或环境变量 `MI_SCAN_DEVICE_NAME`——它会作为 HTTP User-Agent 发送，只能用
+ASCII。
+
 授权和换 token 两步里的 `client_id` / `redirect_uri` / `device_id` 必须完全一致，
 否则服务端返回 `96002 invalid request`，所以这三个值按 profile 固定下来。
 加 `-v` 可以看到换 token 时实际发出的请求。

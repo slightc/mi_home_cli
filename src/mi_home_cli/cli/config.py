@@ -21,6 +21,7 @@ KEYS = {
     "output": "默认输出格式：table/json/yaml/plain",
     "home": "默认家庭（等价于 mi home use）",
     "channel": "默认控制通道：cloud / auto / lan",
+    "scan_device_name": "扫码登录在小米「登录设备」里显示的名字（默认 mi-home-cli/版本）",
 }
 
 CHANNELS = ("cloud", "auto", "lan")
@@ -58,6 +59,20 @@ def _coerce(app_ctx: AppContext, key: str, value: str) -> Any:
 
         home = load_registry(app_ctx).find_home(value)
         return {"id": home["home_id"], "name": home["home_name"]}
+    if key == "scan_device_name":
+        # 这个值会当作 HTTP User-Agent 发出去，HTTP 头只能是 ASCII/Latin-1，
+        # 中文之类的字符没法通过 UA 传，设置时就拦下来说清楚。
+        value = value.strip()
+        if not value:
+            raise UsageError("设备名不能为空")
+        try:
+            value.encode("latin-1")
+        except UnicodeEncodeError as err:
+            raise UsageError(
+                "设备名只能用 ASCII 字符（它会作为 HTTP User-Agent 发送，"
+                "带不了中文等非 ASCII 字符）"
+            ) from err
+        return value
     return value
 
 

@@ -125,6 +125,7 @@ class QrLoginClient:
         device_id: str,
         state: str,
         web_device_id: str | None = None,
+        user_agent: str | None = None,
         timeout: float = const.HTTP_TIMEOUT,
         client: httpx.Client | None = None,
         trace: Callable[[str], None] | None = None,
@@ -133,10 +134,11 @@ class QrLoginClient:
         self.device_id = device_id
         self.state = state
         self._trace = trace
+        # 小米「登录设备」里显示的名字是从这个 User-Agent 解析出来的，可自定义。
         self._client = client or httpx.Client(
             timeout=timeout,
             follow_redirects=False,
-            headers={"User-Agent": const.WEB_USER_AGENT},
+            headers={"User-Agent": user_agent or const.WEB_USER_AGENT},
         )
         self._owns_client = client is None
         if web_device_id:
