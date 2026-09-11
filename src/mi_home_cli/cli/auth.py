@@ -335,6 +335,13 @@ def _scan_login(
         render.info("")
         if qr:
             render.raw(qr)
+            render.info("")
+            # 半块二维码若有横纹/发虚，通常是终端「行距(line spacing)」留了缝，
+            # 调到 1.0 即为实心；实在不行用下面的图片链接，一样扫。
+            render.info(
+                "[dim]二维码有横纹或发虚？把终端行距（line spacing）调到 1.0 就实心了；"
+                "或直接用下面的图片链接。[/dim]"
+            )
         else:
             # segno 是直接依赖，正常装好即有；这里只是极端情况下的兜底。
             render.warn("无法在终端里渲染二维码，请改用下面的图片链接扫码。")
