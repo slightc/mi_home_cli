@@ -337,17 +337,22 @@ def _scan_login(
             render.raw(qr)
         else:
             # segno 是直接依赖，正常装好即有；这里只是极端情况下的兜底。
-            render.warn("无法在终端里渲染二维码，改用下面的方式扫码：")
-            if challenge.qr_image_url:
-                render.info("· 用浏览器打开这个地址看二维码，再用小米 App 扫：")
-                render.raw(challenge.qr_image_url)
-            render.info("· 或把下面这段地址自行转成二维码后扫：")
-            render.raw(challenge.login_url)
+            render.warn("无法在终端里渲染二维码，请改用下面的图片链接扫码。")
         render.info("")
         render.info(
             "[bold]用小米 App 扫码：[/bold]我的 → 点右上角扫一扫（或设置 → 小米账号），"
             "扫码后在手机上点「确认登录」。"
         )
+        # 终端渲染受字体/行距影响不一定扫得出，始终附上图片链接兜底，别让人卡死。
+        if challenge.qr_image_url:
+            render.info(
+                "[dim]终端里的二维码扫不出？用浏览器打开这个地址看图再扫：[/dim]"
+            )
+            render.raw(challenge.qr_image_url)
+        render.info(
+            "[dim]也可以把下面这段地址自行转成二维码后扫：[/dim]"
+        )
+        render.raw(challenge.login_url)
         render.info(
             f"[dim]二维码有效期约 {int(challenge.timeout)} 秒，正在等待确认…[/dim]"
         )

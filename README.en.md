@@ -122,6 +122,10 @@ phone — no browser, no pasting. This is a pure-API reimplementation of the log
 redirect flow (**no headless browser**); the auth code it yields is exactly the one the
 browser flow produces. It works out of the box — nothing extra to install.
 
+The terminal QR depends on your font and line spacing, so in a few terminals it may not
+scan — that's fine: the command also **prints a QR image URL**. Open that image in a
+browser and scan it instead (same QR), so you're never stuck.
+
 ## Core concepts
 
 ### How to refer to a device
