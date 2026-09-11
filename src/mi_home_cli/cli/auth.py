@@ -22,6 +22,7 @@ from ..core.callback import (
     resolve_redirect_host,
 )
 from ..core.oauth import OAuthClient, build_auth_url, state_for_device
+from ..core.qrlogin import QrLoginClient, render_qr
 from ..errors import MiCliError, NotAuthenticated, UsageError
 from ..render import OutputFormat, mask
 from ..store import Profile, config_dir, list_profiles, read_config, write_config
@@ -126,6 +127,12 @@ def login(
     region: Annotated[
         Optional[str], typer.Option("--region", "-r", help="区域：" + "/".join(const.CLOUD_SERVERS))
     ] = None,
+    scan: Annotated[
+        bool,
+        typer.Option(
+            "--scan", help="用小米账号扫码登录（终端显示二维码，无需浏览器）"
+        ),
+    ] = False,
     manual: Annotated[
         bool, typer.Option("--manual", help="不监听端口，只手工粘贴回调地址")
     ] = False,
@@ -171,12 +178,6 @@ def login(
     device_id = device_id or identity.device_id
     # state 用 HA 的算法，纯粹是为了少一个和上游不一致的变量。
     state = state_for_device(device_id)
-    auth_url = build_auth_url(
-        redirect_url=redirect,
-        device_id=device_id,
-        state=state,
-        skip_confirm=skip_confirm,
-    )
     # 先落盘，换 token 失败时还能用 `mi auth exchange` 拿同一个 code 重试。
     profile.write_pending(
         {
@@ -186,6 +187,24 @@ def login(
             "state": state,
             "created_at": int(time.time()),
         }
+    )
+
+    if scan:
+        _scan_login(
+            app_ctx,
+            region=region,
+            redirect=redirect,
+            device_id=device_id,
+            state=state,
+            wait=wait,
+        )
+        return
+
+    auth_url = build_auth_url(
+        redirect_url=redirect,
+        device_id=device_id,
+        state=state,
+        skip_confirm=skip_confirm,
     )
 
     result_queue: "queue.Queue[object]" = queue.Queue()
@@ -288,6 +307,75 @@ def _exchange_and_save(
     render.info(
         f"有效期约 {_fmt_duration(auth.expires_at - time.time())}，到期前会自动续期"
     )
+
+
+def _scan_login(
+    app_ctx: AppContext,
+    *,
+    region: str,
+    redirect: str,
+    device_id: str,
+    state: str,
+    wait: float,
+) -> None:
+    """扫码登录：终端显示二维码，用小米 App 扫码确认后自动拿 code 换 token。"""
+    trace = render.raw if app_ctx.verbose else None
+    render.info("")
+    render.info("[bold]正在获取二维码…[/bold]")
+    with QrLoginClient(
+        redirect_url=redirect,
+        device_id=device_id,
+        state=state,
+        timeout=app_ctx.timeout,
+        trace=trace,
+    ) as client:
+        challenge = client.start()
+
+        qr = render_qr(challenge.login_url)
+        render.info("")
+        if qr:
+            render.raw(qr)
+        else:
+            render.warn(
+                "未安装 segno，无法在终端里画二维码。"
+                "装上就能直接扫（uv tool install --with segno mi-home-cli）。"
+            )
+            render.info("现在可以用下面两种方式之一扫码：")
+            if challenge.qr_image_url:
+                render.info("· 用浏览器打开这个地址看二维码，再用小米 App 扫：")
+                render.raw(challenge.qr_image_url)
+            render.info("· 或把下面这段地址自行转成二维码后扫：")
+            render.raw(challenge.login_url)
+        render.info("")
+        render.info(
+            "[bold]用小米 App 扫码：[/bold]我的 → 点右上角扫一扫（或设置 → 小米账号），"
+            "扫码后在手机上点「确认登录」。"
+        )
+        render.info(
+            f"[dim]二维码有效期约 {int(challenge.timeout)} 秒，正在等待确认…[/dim]"
+        )
+
+        deadline = time.monotonic() + min(wait, float(challenge.timeout))
+        location = client.poll(challenge, deadline=deadline)
+        render.info("扫码已确认，正在换取 token…")
+        result = client.resolve_code(location)
+
+    try:
+        _exchange_and_save(
+            app_ctx,
+            region=region,
+            redirect=redirect,
+            device_id=device_id,
+            code=result.code,
+        )
+    except MiCliError as err:
+        # 和浏览器登录一致：换 token 失败时授权码通常还没被消耗，可直接重试。
+        render.error(err.message)
+        if err.hint:
+            render.info(f"[dim]提示：{err.hint}[/dim]")
+        render.info("授权码还在有效期内的话可以直接重试：")
+        render.raw(f"  mi -v auth exchange {result.code}")
+        raise typer.Exit(code=err.exit_code) from err
 
 
 @app.command()

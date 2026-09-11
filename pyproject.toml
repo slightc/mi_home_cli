@@ -51,9 +51,12 @@ Issues = "https://github.com/slightc/mi_home_cli/issues"
 [project.optional-dependencies]
 # 可选的运行时增强：登录时自动广播 mDNS，提高回调命中率。
 mdns = ["zeroconf>=0.130"]
+# 可选：`mi auth login --scan` 在终端里画二维码。segno 是纯 Python、零依赖的小库，
+# 不装也能扫码（回退到打印二维码图片地址），装上体验更好。
+qr = ["segno>=1.5"]
 
 [dependency-groups]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "segno>=1.5"]
 
 [project.scripts]
 mi = "mi_home_cli.cli.app:main"

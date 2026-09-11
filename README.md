@@ -46,7 +46,8 @@ pip install mi-home-cli
 ```
 
 `--with zeroconf`（pipx 用 `pipx install "mi-home-cli[mdns]"`）是可选的 mdns 增强，
-能提高登录时自动接收回调的成功率。
+能提高登录时自动接收回调的成功率；再加 `--with segno`（pipx 用
+`"mi-home-cli[qr]"`）就能用 `mi auth login --scan` 在终端里直接画二维码扫码登录。
 
 装好后：
 
@@ -95,6 +96,23 @@ mi fan 净化器 --speed 2
    **把地址栏里的整段地址粘回终端**即可（`mi auth login --manual` 直接走这条路）。
 
 本地回调和粘贴是同时等待的，谁先到用谁。token 用掉 70% 有效期后自动续期。
+
+**嫌浏览器麻烦？用扫码登录：**
+
+```bash
+mi auth login --scan
+```
+
+终端里会画出一个二维码，用小米 App 扫一扫（我的 → 右上角扫一扫，或设置 →
+小米账号），在手机上点「确认登录」即可——全程不碰浏览器、不用粘贴。这是纯 API
+调用复刻登录页的跳转流程（不引入无头浏览器），扫码拿到的授权码和浏览器登录
+完全一样。终端画二维码需要可选依赖 `segno`：
+
+```bash
+uv tool install --with segno mi-home-cli        # 或 pipx install "mi-home-cli[qr]"
+```
+
+没装 `segno` 也能扫——会改成打印一个二维码图片地址，用浏览器打开后再扫。
 
 ## 核心概念
 
@@ -173,7 +191,8 @@ mi config set channel auto     # 想默认走局域网
 ### 账号
 
 ```bash
-mi auth login [--manual] [--no-browser] [--region cn]
+mi auth login [--scan] [--manual] [--no-browser] [--region cn]
+mi auth login --scan         # 扫码登录：终端画二维码，用小米 App 扫，不用浏览器
 mi auth status [--check]     # 登录状态、token 剩余有效期
 mi auth exchange <code|URL>  # 换 token 那步失败时，用同一个授权码重试
 mi auth refresh | whoami | logout
@@ -396,7 +415,7 @@ uv run pytest
 
 | | 状态 |
 | --- | --- |
-| OAuth 登录、token 续期、多账号 | ✅ |
+| OAuth 登录（浏览器 / 粘贴 / 扫码 `--scan`）、token 续期、多账号 | ✅ |
 | 家庭 / 房间 / 设备清单 | ✅ |
 | spec 获取与缓存、属性读写、动作调用 | ✅ |
 | 语义命令、别名、默认家庭 | ✅ |
