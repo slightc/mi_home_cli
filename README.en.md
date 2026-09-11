@@ -54,7 +54,8 @@ pip install mi-home-cli
 
 `--with zeroconf` (with pipx: `pipx install "mi-home-cli[mdns]"`) is the optional mdns
 enhancement — it improves the success rate of automatically receiving the login
-callback.
+callback. QR login (`mi auth login --scan`) works out of the box — nothing extra to
+install.
 
 Then:
 
@@ -108,6 +109,18 @@ will:
 
 The local callback and the paste are awaited at the same time; whichever arrives first
 wins. Tokens auto-renew once 70% of their lifetime is used.
+
+**Prefer not to touch a browser? Use QR login:**
+
+```bash
+mi auth login --scan
+```
+
+A QR code is drawn right in your terminal. Scan it with the Mi Home / Xiaomi Home app
+(Me → the scan button, or Settings → Xiaomi Account) and tap "Confirm login" on your
+phone — no browser, no pasting. This is a pure-API reimplementation of the login page's
+redirect flow (**no headless browser**); the auth code it yields is exactly the one the
+browser flow produces. It works out of the box — nothing extra to install.
 
 ## Core concepts
 
@@ -189,7 +202,8 @@ Full arguments in [docs/cli-spec.md](docs/cli-spec.md).
 ### Account
 
 ```bash
-mi auth login [--manual] [--no-browser] [--region cn]
+mi auth login [--scan] [--manual] [--no-browser] [--region cn]
+mi auth login --scan         # QR login: a QR in the terminal, scan with the app
 mi auth status [--check]     # login state, remaining token lifetime
 mi auth exchange <code|URL>  # retry the token-exchange step with the same auth code
 mi auth refresh | whoami | logout
@@ -424,7 +438,7 @@ After editing `pyproject.toml`, run `uv lock` to update the lockfile.
 
 | | Status |
 | --- | --- |
-| OAuth login, token renewal, multi-account | ✅ |
+| OAuth login (browser / paste / QR `--scan`), token renewal, multi-account | ✅ |
 | Homes / rooms / device list | ✅ |
 | spec fetch & cache, property read/write, action calls | ✅ |
 | Semantic commands, aliases, default home | ✅ |

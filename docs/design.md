@@ -217,6 +217,46 @@ query 不校验。**
 token 到期前（用掉 70% 有效期）自动续期；续期失败则提示重新 `mi auth login`，
 退出码 `10`。
 
+### 3.3 扫码登录（`--scan`）
+
+浏览器登录的痛点全在 `redirect_uri` 白名单上（见 3.2）。扫码登录换个思路：
+**授权码照样是浏览器登录页产出的那个 `code`，只是把「人在浏览器里输账号密码」
+换成「人用小米 App 扫码确认」**。后半段（`code` → `get_token`）与浏览器登录
+共用同一套代码和同一套身份三件套，扫码只是前半段「拿 code」的另一种方式。
+
+**明确不引入无头浏览器**，纯 API 调用复刻登录页的跳转流程。解析授权页跳转的
+结论如下（`core/qrlogin.py`）：
+
+1. `GET oauth2/authorize`（`skip_confirm=true`）→ `302` 跳到
+   `pass/serviceLogin?...&sid=oauth2.0&callback=...&_ssign=...`。serviceLogin 的
+   地址不写死，跟着这个 302 走，少一个会变的常量。
+2. `GET serviceLogin?_json=true` → 返回 JSON，取出登录参数 `_sign` / `sid` /
+   `qs` / `callback` / `serviceParam`。未登录时响应里带 `code=70016 登录验证失败`，
+   这是**正常状态**（要的是里面的参数，不是登录结果）；同时服务端种下 `deviceId`
+   等 cookie，后续每一步都要带着。
+3. `GET longPolling/loginUrl`（带上一步的参数）→ 返回：
+   - `loginUrl`：编码进二维码给用户扫的地址；
+   - `lp`：长轮询地址；
+   - `qr`：服务端渲染的二维码图片地址（没装 `segno` 时的兜底）；
+   - `timeout`：二维码有效期（约 300 秒）。
+4. 终端里把 `loginUrl` 画成二维码。用「黑字白底 ANSI + 半块字符」渲染：每个字符
+   单元上下叠两个模块，高度减半；显式给黑前景白背景，保证暗模块在深色/浅色终端
+   里都是暗的，不会因终端主题反色导致扫不出。二维码编码用 `segno`（纯 Python、
+   零依赖的小库，作为直接依赖，装好即用；极端情况下被裁掉则回退到打印 `qr`
+   图片地址）。
+5. 长轮询 `lp`：它会一直挂起直到手机确认。单次请求挂到上限（30s）就重发，总时
+   限由 `--wait` 和二维码有效期里较小的那个决定。手机已扫未确认时服务端可能先返
+   回一个没有 `location` 的中间响应，这时接着等。
+6. 确认后 `lp` 返回一个 `location`。**携带一路攒下的 cookie** 跟随它的跳转链
+   （`sts` → `oauth2/authorize` → `redirect_uri`）。走到 host 为
+   `homeassistant.local` 那一跳时——那台机器多半不可达——**只解析不真正请求**，
+   直接从 URL 的 query 里取出 `code` 和 `state`（复用粘贴那条路的解析，含 `state`
+   校验）。
+7. `code` 交给 `OAuthClient.exchange_code`，与浏览器登录汇合。
+
+区域（`--region`）只影响后面换 token 的 API host，账号登录页本身与区域无关，
+`longPolling/loginUrl` 会按出口自动选接入点（响应里的 `dc`）。
+
 ---
 
 ## 4. 两个「好用度」核心：设备解析与属性解析

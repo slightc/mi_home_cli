@@ -25,8 +25,9 @@
 ## 1. 认证 `mi auth`
 
 ```bash
-mi auth login [--region cn] [--manual] [--no-browser] [--no-mdns]
+mi auth login [--region cn] [--scan] [--manual] [--no-browser] [--no-mdns]
               [--redirect-url URL] [--wait 300] [--skip-confirm]
+mi auth login --scan           # 扫码登录：终端里画二维码，用小米 App 扫，不用浏览器
 mi auth status [--check]       # 登录状态、uid、昵称、token 剩余有效期
 mi auth exchange <code|URL>    # 用授权码换 token（换取失败时拿同一个码重试）
 mi auth refresh                # 手动刷新 access_token
@@ -40,9 +41,13 @@ mi profile list|use|remove|path
 所以登录时 CLI 会监听本机 8123 并尝试用 mDNS 把这个域名指向本机；
 不成功也没关系，把浏览器地址栏里的整段地址粘回终端即可。
 
+- `--scan`：扫码登录。在终端里画出二维码，用小米 App 扫码并在手机上确认即可，
+  全程不需要浏览器、不需要粘贴。纯 API 调用复刻登录页的跳转流程（见
+  [design.md §3.3](./design.md)），不引入无头浏览器，装好即用。`--scan` 与
+  `--manual` / mDNS / 本地回调无关，设了它就只走扫码这一条路。
 - `--manual`：不监听端口，只走粘贴。
 - `--no-mdns`：不广播 mDNS（局域网里有真的 Home Assistant 时用）。
-- `--wait`：等待授权的秒数，默认 300。
+- `--wait`：等待授权的秒数，默认 300（扫码时上限还受二维码有效期约束）。
 - `--device-id`：覆盖 `device_id`（排查用；默认按 HA 的形态生成）。
 
 授权和换 token 两步里的 `client_id` / `redirect_uri` / `device_id` 必须完全一致，

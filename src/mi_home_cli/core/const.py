@@ -11,6 +11,20 @@ CLIENT_ID = "2882303761520251711"
 OAUTH_AUTH_URL = "https://account.xiaomi.com/oauth2/authorize"
 USER_PROFILE_URL = "https://open.account.xiaomi.com/user/profile"
 
+# 小米账号登录页（passport）。扫码登录复刻的就是浏览器打开授权页后跳到的这套
+# 页面的接口调用，全程只和这个 host 打交道（区域无关，区域只影响后面换 token
+# 的 API host）。
+ACCOUNT_HOST = "account.xiaomi.com"
+# 拿二维码 + 长轮询地址的接口；serviceLogin 的地址不写死，跟着授权页的 302 走。
+LONG_POLLING_URL = f"https://{ACCOUNT_HOST}/longPolling/loginUrl"
+# passport 的 JSON 响应有时带这个前缀，防 JSON 劫持，解析前要剥掉。
+XIAOMI_JSON_PREFIX = "&&&START&&&"
+# 账号页对不带浏览器 UA 的请求偶尔行为不同，扫码流程统一用一个浏览器 UA。
+WEB_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+)
+
 # 小米 OAuth 服务端对 redirect_uri 做白名单校验，实测结论：
 #   * host 必须是 homeassistant.local:8123，换端口或换成 localhost/127.0.0.1
 #     都会返回 "invalid redirect uri"；
