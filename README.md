@@ -46,8 +46,8 @@ pip install mi-home-cli
 ```
 
 `--with zeroconf`（pipx 用 `pipx install "mi-home-cli[mdns]"`）是可选的 mdns 增强，
-能提高登录时自动接收回调的成功率；再加 `--with segno`（pipx 用
-`"mi-home-cli[qr]"`）就能用 `mi auth login --scan` 在终端里直接画二维码扫码登录。
+能提高登录时自动接收回调的成功率。扫码登录（`mi auth login --scan`）开箱即用，
+不需要额外装依赖。
 
 装好后：
 
@@ -106,13 +106,7 @@ mi auth login --scan
 终端里会画出一个二维码，用小米 App 扫一扫（我的 → 右上角扫一扫，或设置 →
 小米账号），在手机上点「确认登录」即可——全程不碰浏览器、不用粘贴。这是纯 API
 调用复刻登录页的跳转流程（不引入无头浏览器），扫码拿到的授权码和浏览器登录
-完全一样。终端画二维码需要可选依赖 `segno`：
-
-```bash
-uv tool install --with segno mi-home-cli        # 或 pipx install "mi-home-cli[qr]"
-```
-
-没装 `segno` 也能扫——会改成打印一个二维码图片地址，用浏览器打开后再扫。
+完全一样。装好这个工具就能直接用，不需要额外装什么。
 
 ## 核心概念
 

@@ -336,11 +336,8 @@ def _scan_login(
         if qr:
             render.raw(qr)
         else:
-            render.warn(
-                "未安装 segno，无法在终端里画二维码。"
-                "装上就能直接扫（uv tool install --with segno mi-home-cli）。"
-            )
-            render.info("现在可以用下面两种方式之一扫码：")
+            # segno 是直接依赖，正常装好即有；这里只是极端情况下的兜底。
+            render.warn("无法在终端里渲染二维码，改用下面的方式扫码：")
             if challenge.qr_image_url:
                 render.info("· 用浏览器打开这个地址看二维码，再用小米 App 扫：")
                 render.raw(challenge.qr_image_url)

@@ -43,10 +43,8 @@ mi profile list|use|remove|path
 
 - `--scan`：扫码登录。在终端里画出二维码，用小米 App 扫码并在手机上确认即可，
   全程不需要浏览器、不需要粘贴。纯 API 调用复刻登录页的跳转流程（见
-  [design.md §3.3](./design.md)），不引入无头浏览器。终端二维码需要可选依赖
-  `segno`（`uv tool install --with segno mi-home-cli`）；没装则回退到打印二维码
-  图片地址，用浏览器打开后再扫。`--scan` 与 `--manual` / mDNS / 本地回调无关，
-  设了它就只走扫码这一条路。
+  [design.md §3.3](./design.md)），不引入无头浏览器，装好即用。`--scan` 与
+  `--manual` / mDNS / 本地回调无关，设了它就只走扫码这一条路。
 - `--manual`：不监听端口，只走粘贴。
 - `--no-mdns`：不广播 mDNS（局域网里有真的 Home Assistant 时用）。
 - `--wait`：等待授权的秒数，默认 300（扫码时上限还受二维码有效期约束）。

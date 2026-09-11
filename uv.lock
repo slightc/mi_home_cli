@@ -290,6 +290,7 @@ dependencies = [
     { name = "httpx" },
     { name = "paho-mqtt" },
     { name = "rich" },
+    { name = "segno" },
     { name = "typer" },
 ]
 
@@ -297,14 +298,10 @@ dependencies = [
 mdns = [
     { name = "zeroconf" },
 ]
-qr = [
-    { name = "segno" },
-]
 
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
-    { name = "segno" },
 ]
 
 [package.metadata]
@@ -313,17 +310,14 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "paho-mqtt", specifier = ">=2.1.0" },
     { name = "rich", specifier = ">=13.0" },
-    { name = "segno", marker = "extra == 'qr'", specifier = ">=1.5" },
+    { name = "segno", specifier = ">=1.5" },
     { name = "typer", specifier = ">=0.12" },
     { name = "zeroconf", marker = "extra == 'mdns'", specifier = ">=0.130" },
 ]
-provides-extras = ["mdns", "qr"]
+provides-extras = ["mdns"]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "segno", specifier = ">=1.5" },
-]
+dev = [{ name = "pytest", specifier = ">=8.0" }]
 
 [[package]]
 name = "packaging"

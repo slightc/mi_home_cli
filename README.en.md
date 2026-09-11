@@ -54,8 +54,8 @@ pip install mi-home-cli
 
 `--with zeroconf` (with pipx: `pipx install "mi-home-cli[mdns]"`) is the optional mdns
 enhancement — it improves the success rate of automatically receiving the login
-callback. Add `--with segno` (with pipx: `"mi-home-cli[qr]"`) to draw a QR code right
-in the terminal for `mi auth login --scan`.
+callback. QR login (`mi auth login --scan`) works out of the box — nothing extra to
+install.
 
 Then:
 
@@ -120,15 +120,7 @@ A QR code is drawn right in your terminal. Scan it with the Mi Home / Xiaomi Hom
 (Me → the scan button, or Settings → Xiaomi Account) and tap "Confirm login" on your
 phone — no browser, no pasting. This is a pure-API reimplementation of the login page's
 redirect flow (**no headless browser**); the auth code it yields is exactly the one the
-browser flow produces. Drawing the QR in the terminal needs the optional `segno`
-dependency:
-
-```bash
-uv tool install --with segno mi-home-cli        # or: pipx install "mi-home-cli[qr]"
-```
-
-Without `segno` it still works — it prints a QR image URL instead, which you open in a
-browser and then scan.
+browser flow produces. It works out of the box — nothing extra to install.
 
 ## Core concepts
 
