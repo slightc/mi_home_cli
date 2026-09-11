@@ -258,6 +258,12 @@ token 到期前（用掉 70% 有效期）自动续期；续期失败则提示重
 区域（`--region`）只影响后面换 token 的 API host，账号登录页本身与区域无关，
 `longPolling/loginUrl` 会按出口自动选接入点（响应里的 `dc`）。
 
+**别每次扫码都多登记一台设备**：登录页首次访问会下发一个随机 `deviceId` cookie，
+小米按它在账号「登录设备」里登记一台 web 设备（按浏览器 UA 显示成 Chrome）。每次
+扫码都新建空 cookie jar 就会不断新增。所以按 profile 生成并持久化一个稳定的
+`deviceId`（`scan_device.json`，形如 `wb_{uuid}`），每次扫码作为 cookie 带上——
+实测服务端会原样沿用（`Set-Cookie` 回显同值），小米于是认成同一台，不再新增。
+
 **首次授权的兜底**：小米对首次授权强制要求手动点一次「同意并关联」（OAuth 授权
 确认，浏览器登录也一样），`skip_confirm=true` 只能跳过**以后**已授权过的登录。若
 首次扫码因此拿不到 code 或换 token 失败，扫码流程会退回到给出**原始授权链接**

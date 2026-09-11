@@ -124,6 +124,7 @@ class QrLoginClient:
         redirect_url: str,
         device_id: str,
         state: str,
+        web_device_id: str | None = None,
         timeout: float = const.HTTP_TIMEOUT,
         client: httpx.Client | None = None,
         trace: Callable[[str], None] | None = None,
@@ -138,6 +139,15 @@ class QrLoginClient:
             headers={"User-Agent": const.WEB_USER_AGENT},
         )
         self._owns_client = client is None
+        if web_device_id:
+            # 预置一个稳定的 web deviceId，服务端会原样沿用（实测 Set-Cookie 回显同值），
+            # 这样每次扫码在小米「登录设备」里都是同一台，不会越登记越多。
+            self._client.cookies.set(
+                "deviceId", web_device_id, domain=const.ACCOUNT_HOST, path="/"
+            )
+            self._client.cookies.set(
+                "pass_ua", "web", domain=const.ACCOUNT_HOST, path="/"
+            )
 
     def close(self) -> None:
         if self._owns_client:

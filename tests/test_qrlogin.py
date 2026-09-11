@@ -55,6 +55,36 @@ def _qr(handler) -> QrLoginClient:
     )
 
 
+def test_start_reuses_persistent_web_device_id():
+    """预置的 web deviceId 会作为 cookie 带上，让小米认成同一台设备。"""
+    seen_cookies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen_cookies.append(request.headers.get("cookie", ""))
+        path = request.url.path
+        if path == "/oauth2/authorize":
+            return httpx.Response(
+                302, headers={"location": "https://account.xiaomi.com/pass/serviceLogin"}
+            )
+        if path == "/pass/serviceLogin":
+            return httpx.Response(200, json=SERVICE_LOGIN)
+        if path == "/longPolling/loginUrl":
+            return httpx.Response(200, json=LONG_POLLING)
+        raise AssertionError(path)
+
+    client = QrLoginClient(
+        redirect_url=REDIRECT,
+        device_id=DEVICE_ID,
+        state=STATE,
+        web_device_id="wb_fixed-device-123",
+        client=_client(handler),
+    )
+    with client:
+        client.start()
+    # serviceLogin / longPolling 这几跳都带上了固定的 deviceId
+    assert any("deviceId=wb_fixed-device-123" in c for c in seen_cookies)
+
+
 def test_start_builds_challenge():
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path

@@ -334,6 +334,7 @@ Claude Code 会自动加载，它会教 agent 怎么定位设备、查 spec、�
 └── profiles/<name>/
     ├── auth.json               # token（0600）
     ├── identity.json           # OAuth 用的 device_id、回调 id
+    ├── scan_device.json        # 扫码登录复用的 web deviceId，避免每次多登记一台设备
     ├── devices.json            # 设备清单缓存，含局域网 token（0600）
     ├── aliases.json            # 自定义别名
     ├── lan.json                # 局域网地址缓存

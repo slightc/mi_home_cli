@@ -355,6 +355,7 @@ Exit codes:
 └── profiles/<name>/
     ├── auth.json               # tokens (0600)
     ├── identity.json           # device_id and callback id used for OAuth
+    ├── scan_device.json        # reused web deviceId for QR login (avoids piling up devices)
     ├── devices.json            # device list cache, incl. LAN tokens (0600)
     ├── aliases.json            # custom aliases
     ├── lan.json                # LAN address cache

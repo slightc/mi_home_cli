@@ -257,6 +257,24 @@ class Profile:
     def clear_pending(self) -> None:
         self.pending_path.unlink(missing_ok=True)
 
+    @property
+    def scan_device_path(self) -> Path:
+        return self.path / "scan_device.json"
+
+    def web_device_id(self) -> str:
+        """扫码登录复用的稳定 web `deviceId`，首次生成后固定下来。
+
+        小米账号登录页第一次访问会下发一个随机 `deviceId`，并按它在「登录设备」里
+        登记一台 web 设备（按浏览器 UA 显示成 Chrome）。每次扫码都用新 `deviceId`
+        就会越登记越多；把它固定住并每次带上，小米就认成同一台，不再新增。
+        """
+        data = _read_json(self.scan_device_path) or {}
+        device = data.get("device_id")
+        if not device:
+            device = f"wb_{uuid.uuid4()}"
+            _write_private_json(self.scan_device_path, {"device_id": device})
+        return device
+
 
 def list_profiles(root: Path | None = None) -> list[str]:
     base = (root or config_dir()) / "profiles"

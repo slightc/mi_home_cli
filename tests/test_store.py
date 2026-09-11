@@ -94,6 +94,14 @@ def test_pending_login_roundtrip(profile: Profile):
     assert profile.read_pending() is None
 
 
+def test_web_device_id_is_stable_and_private(profile: Profile):
+    device = profile.web_device_id()
+    assert device.startswith("wb_")
+    # 反复取要稳定，否则每次扫码又会在小米账号里多登记一台设备
+    assert profile.web_device_id() == device
+    assert file_is_private(profile.scan_device_path)
+
+
 def test_clear_and_purge(profile: Profile):
     profile.write_auth(_auth())
     profile.clear_auth()

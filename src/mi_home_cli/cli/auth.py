@@ -389,6 +389,8 @@ def _scan_capture_code(
         redirect_url=redirect,
         device_id=device_id,
         state=state,
+        # 固定的 web deviceId：避免每次扫码都在小米账号里多登记一台 Chrome。
+        web_device_id=app_ctx.profile.web_device_id(),
         timeout=app_ctx.timeout,
         trace=trace,
     ) as client:
