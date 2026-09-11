@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import time
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -75,7 +76,9 @@ def render_qr(data: str) -> str | None:
     仍受限于终端字符格的宽高比：多数终端「高≈2×宽」，此时模块接近正方；个别接近
     正方的字体/渲染器下模块会偏扁，但用背景色成块填充后至少干净、可扫。
 
-    `segno` 是直接依赖，正常总能导入；万一被环境裁掉则返回 None，由调用方兜底。
+    内容太长导致二维码宽度超过终端列数时返回 None——宁可不画也不能让它换行折断
+    （折断的二维码根本扫不出）；由调用方退回到给链接。`segno` 是直接依赖，正常总能
+    导入；万一被环境裁掉也返回 None。
     """
     try:
         import segno
@@ -86,6 +89,10 @@ def render_qr(data: str) -> str | None:
     matrix = [list(row) for row in segno.make(data, error="m").matrix_iter(
         scale=1, border=4
     )]
+    # 每个模块占 1 列；超过终端宽度会换行折断，直接放弃让调用方给链接。
+    columns = shutil.get_terminal_size((80, 24)).columns
+    if len(matrix[0]) > columns:
+        return None
     if len(matrix) % 2:  # 补一行全亮，好两两配对
         matrix.append([0] * len(matrix[0]))
 

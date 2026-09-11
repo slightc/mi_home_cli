@@ -261,6 +261,25 @@ def test_render_qr_returns_scannable_block():
     assert abs(width - len(lines) * 2) <= 2
 
 
+def test_render_qr_returns_none_when_too_wide(monkeypatch):
+    import os
+
+    # 终端只有 10 列，二维码宽度必然超出 → 宁可不画（否则换行折断扫不出）
+    monkeypatch.setattr(
+        "shutil.get_terminal_size", lambda fallback=(80, 24): os.terminal_size((10, 24))
+    )
+    assert render_qr("https://example.com/some/long/enough/scan/url") is None
+
+
+def test_render_qr_ok_when_wide_enough(monkeypatch):
+    import os
+
+    monkeypatch.setattr(
+        "shutil.get_terminal_size", lambda fallback=(80, 24): os.terminal_size((200, 50))
+    )
+    assert render_qr("https://example.com/scan") is not None
+
+
 def _deadline() -> float:
     import time
 

@@ -309,6 +309,9 @@ def _exchange_and_save(
     )
 
 
+_SCAN_MAX_ATTEMPTS = 3
+
+
 def _scan_login(
     app_ctx: AppContext,
     *,
@@ -318,8 +321,68 @@ def _scan_login(
     state: str,
     wait: float,
 ) -> None:
-    """扫码登录：终端显示二维码，用小米 App 扫码确认后自动拿 code 换 token。"""
+    """扫码登录：终端显示二维码，用小米 App 扫码确认后自动拿 code 换 token。
+
+    首次授权常因为要手动点「同意并关联」而自动拿不到 code / 换 token 失败；这时
+    退回到用**原始授权链接**（浏览器打开，或手机扫二维码）手动登录授权一次，完成
+    后既可以把浏览器回调地址粘回来直接换 token，也可以直接回车重新扫码（此时授权
+    已记住，`skip_confirm` 生效，不用再点）。
+    """
     trace = render.raw if app_ctx.verbose else None
+    for attempt in range(1, _SCAN_MAX_ATTEMPTS + 1):
+        try:
+            result = _scan_capture_code(
+                app_ctx,
+                redirect=redirect,
+                device_id=device_id,
+                state=state,
+                wait=wait,
+                trace=trace,
+            )
+            _exchange_and_save(
+                app_ctx,
+                region=region,
+                redirect=redirect,
+                device_id=device_id,
+                code=result.code,
+            )
+            return
+        except MiCliError as err:
+            render.error(err.message)
+            if err.hint:
+                render.info(f"[dim]提示：{err.hint}[/dim]")
+            # 非交互（管道里）或重试次数用尽：只打印手动授权引导，然后退出。
+            if not render.is_tty() or attempt >= _SCAN_MAX_ATTEMPTS:
+                _scan_guide_manual(
+                    redirect=redirect, device_id=device_id, state=state, prompt=False
+                )
+                raise typer.Exit(code=err.exit_code) from err
+            # 交互式恢复：引导手动授权。粘回调 → 直接换 token；回车 → 重新扫码。
+            pasted = _scan_guide_manual(
+                redirect=redirect, device_id=device_id, state=state, prompt=True
+            )
+            if pasted is not None:
+                _exchange_and_save(
+                    app_ctx,
+                    region=region,
+                    redirect=redirect,
+                    device_id=device_id,
+                    code=pasted.code,
+                )
+                return
+            render.info("好，重新生成扫码二维码…")
+
+
+def _scan_capture_code(
+    app_ctx: AppContext,
+    *,
+    redirect: str,
+    device_id: str,
+    state: str,
+    wait: float,
+    trace,
+) -> CallbackResult:
+    """走一次扫码：显示二维码 → 等手机确认 → 从跳转链取出 code。"""
     render.info("")
     render.info("[bold]正在获取二维码…[/bold]")
     with QrLoginClient(
@@ -343,7 +406,6 @@ def _scan_login(
                 "或直接用下面的图片链接。[/dim]"
             )
         else:
-            # segno 是直接依赖，正常装好即有；这里只是极端情况下的兜底。
             render.warn("无法在终端里渲染二维码，请改用下面的图片链接扫码。")
         render.info("")
         render.info(
@@ -371,24 +433,55 @@ def _scan_login(
         deadline = time.monotonic() + min(wait, float(challenge.timeout))
         location = client.poll(challenge, deadline=deadline)
         render.info("扫码已确认，正在换取 token…")
-        result = client.resolve_code(location)
+        return client.resolve_code(location)
 
-    try:
-        _exchange_and_save(
-            app_ctx,
-            region=region,
-            redirect=redirect,
-            device_id=device_id,
-            code=result.code,
-        )
-    except MiCliError as err:
-        # 和浏览器登录一致：换 token 失败时授权码通常还没被消耗，可直接重试。
-        render.error(err.message)
-        if err.hint:
-            render.info(f"[dim]提示：{err.hint}[/dim]")
-        render.info("授权码还在有效期内的话可以直接重试：")
-        render.raw(f"  mi -v auth exchange {result.code}")
-        raise typer.Exit(code=err.exit_code) from err
+
+def _scan_guide_manual(
+    *, redirect: str, device_id: str, state: str, prompt: bool
+) -> Optional[CallbackResult]:
+    """扫码没走通时的兜底：给出**原始授权链接**（+二维码）让用户手动登录授权。
+
+    `prompt=True`（交互式）会等用户输入：粘贴浏览器回调地址就解析出 code 返回；
+    直接回车返回 None（表示回去重新扫码）。`prompt=False` 只打印引导、返回 None。
+    授权链接用 `skip_confirm=false`，确保首次能看到并点掉「同意并关联」。
+    """
+    auth_url = build_auth_url(
+        redirect_url=redirect, device_id=device_id, state=state, skip_confirm=False
+    )
+    render.info("")
+    render.warn("没能自动完成扫码授权（首次登录往往要手动点一次「同意并关联」）。")
+    render.info("用浏览器打开下面这个地址，登录小米账号并点「同意并关联」完成授权：")
+    render.raw(auth_url)
+    qr = render_qr(auth_url)
+    if qr:
+        render.info("[dim]或用手机扫这个二维码打开上面的页面：[/dim]")
+        render.raw(qr)
+
+    if not prompt:
+        render.info("")
+        render.info("授权完成后，重新运行 `mi auth login --scan` 即可（这次不用再授权）。")
+        return None
+
+    render.info("")
+    render.info(
+        "完成后二选一：把浏览器跳转后地址栏里的整段地址粘到这里回车立刻换 token，"
+        "或直接回车让我重新生成扫码二维码（Ctrl-C 取消）："
+    )
+    while True:
+        try:
+            line = sys.stdin.readline()
+        except (OSError, ValueError):
+            return None
+        if not line:  # EOF
+            return None
+        line = line.strip()
+        if not line:  # 直接回车 → 回去重新扫码
+            return None
+        try:
+            return parse_pasted(line, expected_state=state)
+        except MiCliError as err:
+            render.error(err.message)
+            render.info("再粘一次，或直接回车重新扫码：")
 
 
 @app.command()
