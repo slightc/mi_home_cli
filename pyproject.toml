@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mi-home-cli"
-version = "0.1.0"
+version = "0.1.1"
 description = "Command-line control for Xiaomi Home (MIoT) devices — 命令行控制米家设备"
 readme = "README.md"
 requires-python = ">=3.11"
