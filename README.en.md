@@ -3,6 +3,7 @@
 [简体中文](README.md) · **English**
 
 [![PyPI](https://img.shields.io/pypi/v/mi-home-cli?color=blue)](https://pypi.org/project/mi-home-cli/)
+[![Downloads](https://img.shields.io/pypi/dm/mi-home-cli?color=blue)](https://pypi.org/project/mi-home-cli/)
 [![Python](https://img.shields.io/pypi/pyversions/mi-home-cli)](https://pypi.org/project/mi-home-cli/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/slightc/mi_home_cli?style=social)](https://github.com/slightc/mi_home_cli/stargazers)
