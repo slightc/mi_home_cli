@@ -350,6 +350,10 @@ def _scan_login(
             "[bold]用小米 App 扫码：[/bold]我的 → 点右上角扫一扫（或设置 → 小米账号），"
             "扫码后在手机上点「确认登录」。"
         )
+        render.info(
+            "[dim]首次登录还会弹一个授权页，点「同意并关联 / Agree and link」授权即可"
+            "（以后再扫就免了）；点完这里会自动继续。[/dim]"
+        )
         # 终端渲染受字体/行距影响不一定扫得出，始终附上图片链接兜底，别让人卡死。
         if challenge.qr_image_url:
             render.info(
